@@ -16,9 +16,24 @@ impl State {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Transition {
+    Literal(char),
+    Wildcard,
+    Epsilon, // Empty String
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TransitionModifier {
+    Star,
+    Plus,
+    Question,
+    Range(u64, u64),
+}
+
 #[derive(Debug, Clone)]
 pub struct Nfa {
-    transitions: HashMap<State, HashMap<char, State>>,
+    transitions: HashMap<State, HashMap<Transition, State>>,
     merge_queue: Vec<(State, State)>,
     empty: bool,
 }
@@ -32,33 +47,109 @@ impl Nfa {
         }
     }
 
-    pub fn new(edge: char) -> Self {
-        Nfa {
-            transitions: HashMap::from([(State::Start, HashMap::from([(edge, State::Accepting)]))]),
+    pub fn new(edge: Transition, modifier: Option<TransitionModifier>) -> Self {
+        let mut transitions = HashMap::new();
+
+        let mut final_state = State::Accepting;
+        let mut plus_modifier = false;
+        let mut range: Option<(u64, u64)> = None;
+
+        match modifier {
+            Some(TransitionModifier::Star) => {
+                // handle star
+                final_state = State::new();
+                transitions.insert(
+                    State::Start,
+                    HashMap::from([(Transition::Epsilon, State::Accepting)]),
+                );
+                transitions.insert(
+                    final_state,
+                    HashMap::from([(Transition::Epsilon, State::Start)]),
+                );
+            }
+            Some(TransitionModifier::Plus) => {
+                plus_modifier = true;
+            }
+            Some(TransitionModifier::Question) => {
+                transitions.insert(
+                    State::Start,
+                    HashMap::from([(Transition::Epsilon, State::Accepting)]),
+                );
+            }
+            Some(TransitionModifier::Range(mi, ma)) => {
+                range = Some((mi, ma));
+            }
+            _ => {}
+        }
+
+        if transitions.contains_key(&State::Start) {
+            transitions
+                .get_mut(&State::Start)
+                .unwrap()
+                .insert(edge, final_state);
+        } else {
+            transitions.insert(State::Start, HashMap::from([(edge, final_state)]));
+        }
+
+        let mut ret = Nfa {
+            transitions: transitions,
             merge_queue: Vec::new(),
             empty: false,
+        };
+
+        if plus_modifier {
+            // r+ = rr*
+            ret.concat(&mut Nfa::new(edge, Some(TransitionModifier::Star)));
+        } else if range.is_some() {
+            // r{min,max} = r.(min).rr?.(max-min).r?
+            let range = range.unwrap();
+            for i in 1..range.1 {
+                let modif = if i < range.0 {
+                    None
+                } else {
+                    Some(TransitionModifier::Question)
+                };
+                ret.concat(&mut Nfa::new(edge, modif));
+            }
         }
+
+        ret
     }
 
     pub fn simulate(&self, input: String) -> Result<(), char> {
         let mut curr_state = State::Start;
-        for char in input.chars() {
+        let mut char_iter = input.chars().peekable();
+
+        while curr_state != State::Accepting {
             if let Some(map) = self.transitions.get(&curr_state) {
-                if let Some(new_state) = map.get(&char) {
+                if char_iter.peek().is_some() {
+                    let char = char_iter.peek().unwrap();
+                    if let Some(new_state) = map.get(&Transition::Literal(*char)) {
+                        let _ = char_iter.next();
+                        curr_state = *new_state;
+                    } else if let Some(new_state) = map.get(&Transition::Wildcard) {
+                        let _ = char_iter.next();
+                        curr_state = *new_state;
+                    } else if let Some(new_state) = map.get(&Transition::Epsilon) {
+                        curr_state = *new_state;
+                    } else {
+                        return Err(*char);
+                    }
+                } else if let Some(new_state) = map.get(&Transition::Epsilon) {
                     curr_state = *new_state;
                 } else {
-                    return Err(char);
+                    return Err('x');
                 }
             } else {
-                return Err(char);
+                return Err('y');
             }
         }
 
-        if curr_state == State::Accepting {
+        if curr_state == State::Accepting && char_iter.peek().is_none() {
             return Ok(());
         }
 
-        Err('x')
+        Err('z')
     }
 
     // change all transition entries with State::Start to new_start

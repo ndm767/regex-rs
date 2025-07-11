@@ -1,3 +1,5 @@
+use crate::nfa::{Transition, TransitionModifier};
+
 use super::nfa::Nfa;
 
 #[derive(Debug, Clone)]
@@ -164,10 +166,31 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
     let mut curr_nfa = Nfa::empty();
     let mut union_stack = Vec::new();
 
-    for tok in toks {
-        match tok {
+    let mut tok_iter = toks.iter().peekable();
+
+    while let Some(tok) = tok_iter.next() {
+        let modifier = match tok_iter.peek() {
+            Some(ParseElement::Star) => {
+                let _ = tok_iter.next();
+                Some(TransitionModifier::Star)
+            }
+            Some(ParseElement::Plus) => {
+                let _ = tok_iter.next();
+                Some(TransitionModifier::Plus)
+            }
+            Some(ParseElement::Question) => {
+                let _ = tok_iter.next();
+                Some(TransitionModifier::Question)
+            }
+            Some(ParseElement::Range(mi, ma)) => {
+                let _ = tok_iter.next();
+                Some(TransitionModifier::Range(*mi, *ma))
+            }
+            _ => None,
+        };
+        match *tok {
             ParseElement::Literal(c) => {
-                curr_nfa.concat(&mut Nfa::new(c));
+                curr_nfa.concat(&mut Nfa::new(Transition::Literal(c), modifier));
             }
             ParseElement::Union => {
                 union_stack.push(curr_nfa);

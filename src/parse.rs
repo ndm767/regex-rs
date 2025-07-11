@@ -5,9 +5,10 @@ pub enum ParseElement {
     Literal(char), // a single character
     Wildcard,      // . matches any character
 
-    Star,            // * matches 0 or more times
-    Plus,            // + matches 1 or more times
-    Question,        // ? matches 0 or 1 times
+    Star,     // * matches 0 or more times
+    Plus,     // + matches 1 or more times
+    Question, // ? matches 0 or 1 times
+    #[allow(dead_code)]
     Range(u64, u64), // a{3,5} matches aaa, aaaa, aaaaa
 
     Union, // |
@@ -15,11 +16,16 @@ pub enum ParseElement {
     Caret,  // ^ start of string or line
     Dollar, // $ end of string or line
 
-    Group(Vec<ParseElement>),   // (...)
-    Bracket(Vec<char>),         // [A-Za-z]
+    #[allow(dead_code)]
+    Group(Vec<ParseElement>), // (...)
+    #[allow(dead_code)]
+    Bracket(Vec<char>), // [A-Za-z]
+    #[allow(dead_code)]
     NegativeBracket(Vec<char>), // [^A-Za-z]
 
-    Class(char),        // \w \W \d \D \s \S \b
+    #[allow(dead_code)]
+    Class(char), // \w \W \d \D \s \S \b
+    #[allow(dead_code)]
     BackReference(u64), //\n where n>=1, POSIX regex only mandates 1-9
 }
 
@@ -156,11 +162,16 @@ pub fn lex(input: String) -> Vec<ParseElement> {
 
 pub fn parse(toks: Vec<ParseElement>) -> Nfa {
     let mut curr_nfa = Nfa::empty();
+    let mut union_stack = Vec::new();
 
     for tok in toks {
         match tok {
             ParseElement::Literal(c) => {
                 curr_nfa.concat(&mut Nfa::new(c));
+            }
+            ParseElement::Union => {
+                union_stack.push(curr_nfa);
+                curr_nfa = Nfa::empty();
             }
             /*ParseElement::Wildcard => {
                 curr_nfa.add_transition(Transition::Wildcard);
@@ -172,5 +183,8 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
         }
     }
 
+    while union_stack.len() > 0 {
+        curr_nfa.union(&mut union_stack.pop().unwrap());
+    }
     curr_nfa
 }

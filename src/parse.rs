@@ -18,7 +18,6 @@ pub enum ParseElement {
     Bracket(Vec<char>),         // [A-Za-z]
     NegativeBracket(Vec<char>), // [^A-Za-z]
 
-    Class(char),        // \w \W \d \D \s \S \b
     BackReference(u64), //\n where n>=1, POSIX regex only mandates 1-9
 }
 
@@ -121,7 +120,44 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                 let next = iter.next().unwrap();
 
                 match next {
-                    'w' | 'W' | 'd' | 'D' | 's' | 'S' | 'b' => curr.push(ParseElement::Class(next)),
+                    'w' | 'W' | 'd' | 'D' | 's' | 'S' => {
+                        // character classes are treated like brackets
+                        match next {
+                            'w' | 'W' => {
+                                /* [A-Za-z0-9_]  */
+                                let mut values: Vec<char> = ('A'..='Z').collect();
+                                values.append(&mut ('a'..='z').collect());
+                                values.append(&mut ('0'..='9').collect());
+                                values.push('_');
+                                if next == 'w' {
+                                    curr.push(ParseElement::Bracket(values));
+                                } else {
+                                    curr.push(ParseElement::NegativeBracket(values));
+                                }
+                            }
+                            'd' | 'D' => {
+                                /* [0-9] */
+                                let values: Vec<char> = ('0'..='9').collect();
+                                if next == 'd' {
+                                    curr.push(ParseElement::Bracket(values));
+                                } else {
+                                    curr.push(ParseElement::NegativeBracket(values));
+                                }
+                            }
+                            's' | 'S' => {
+                                /* [ \t] */
+                                let values = vec![' ', '\t'];
+                                if next == 's' {
+                                    curr.push(ParseElement::Bracket(values));
+                                } else {
+                                    curr.push(ParseElement::NegativeBracket(values));
+                                }
+                            }
+                            _ => {
+                                unreachable!()
+                            }
+                        }
+                    }
                     '0'..='9' => {
                         // digits
                         let mut n: u64 = next.to_digit(10).unwrap() as u64;

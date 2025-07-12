@@ -49,6 +49,25 @@ pub enum TransitionModifier {
     Range(u64, u64),
 }
 
+trait TransitionTable<T> {
+    fn add_transition(&mut self, start: T, transition: Transition, end: T);
+}
+
+impl TransitionTable<State> for HashMap<State, HashMap<Transition, Vec<State>>> {
+    fn add_transition(&mut self, start: State, transition: Transition, end: State) {
+        if !self.contains_key(&start) {
+            self.insert(start, HashMap::new());
+        }
+
+        let map = self.get_mut(&start).unwrap();
+        if !map.contains_key(&transition) {
+            map.insert(transition, Vec::new());
+        }
+
+        map.get_mut(&transition).unwrap().push(end);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Nfa {
     pub transitions: HashMap<State, HashMap<Transition, Vec<State>>>,
@@ -84,30 +103,14 @@ impl Nfa {
                 let final_state = State::new();
                 self.set_accepting_state(final_state);
 
-                if !self.transitions.contains_key(&State::Start) {
-                    self.transitions.insert(State::Start, HashMap::new());
-                }
+                self.transitions.add_transition(
+                    State::Start,
+                    Transition::Epsilon,
+                    State::Accepting,
+                );
 
-                let map = self.transitions.get_mut(&State::Start).unwrap();
-                if !map.contains_key(&Transition::Epsilon) {
-                    map.insert(Transition::Epsilon, Vec::new());
-                }
-                map.get_mut(&Transition::Epsilon)
-                    .unwrap()
-                    .push(State::Accepting);
-
-                if !self.transitions.contains_key(&final_state) {
-                    self.transitions.insert(final_state, HashMap::new());
-                }
-
-                let map = self.transitions.get_mut(&final_state).unwrap();
-                if !map.contains_key(&Transition::Epsilon) {
-                    map.insert(Transition::Epsilon, Vec::new());
-                }
-
-                map.get_mut(&Transition::Epsilon)
-                    .unwrap()
-                    .push(State::Start);
+                self.transitions
+                    .add_transition(final_state, Transition::Epsilon, State::Start);
             }
 
             Some(TransitionModifier::Plus) => {
@@ -117,17 +120,11 @@ impl Nfa {
             }
 
             Some(TransitionModifier::Question) => {
-                if !self.transitions.contains_key(&State::Start) {
-                    self.transitions.insert(State::Start, HashMap::new());
-                }
-
-                let map = self.transitions.get_mut(&State::Start).unwrap();
-                if !map.contains_key(&Transition::Epsilon) {
-                    map.insert(Transition::Epsilon, Vec::new());
-                }
-                map.get_mut(&Transition::Epsilon)
-                    .unwrap()
-                    .push(State::Accepting);
+                self.transitions.add_transition(
+                    State::Start,
+                    Transition::Epsilon,
+                    State::Accepting,
+                );
             }
 
             Some(TransitionModifier::Range(lower, upper)) => {
@@ -207,21 +204,11 @@ impl Nfa {
     }
 
     pub fn union(&mut self, other: &mut Self) {
-        for entry in other.transitions.iter() {
-            if self.transitions.contains_key(entry.0) {
-                // merge tables
-                let row = self.transitions.get_mut(entry.0).unwrap();
-                for transition in entry.1.iter() {
-                    if row.contains_key(transition.0) {
-                        let mut new_vals = row.get(transition.0).unwrap().clone();
-                        new_vals.append(&mut transition.1.clone());
-                        row.insert(*transition.0, new_vals);
-                    } else {
-                        row.insert(*transition.0, transition.1.clone());
-                    }
+        for (start, map) in other.transitions.iter() {
+            for (transition, states) in map.iter() {
+                for state in states {
+                    self.transitions.add_transition(*start, *transition, *state);
                 }
-            } else {
-                self.transitions.insert(*entry.0, entry.1.clone());
             }
         }
     }

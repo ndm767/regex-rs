@@ -176,15 +176,6 @@ impl Dfa {
 
                     let transition = possible_edges.iter().find(|&edge| map.get(edge).is_some());
 
-                    println!(
-                        "Char {}, possible edges {:?}, transitions {:?}",
-                        c,
-                        possible_edges,
-                        possible_edges
-                            .iter()
-                            .map(|edge| map.get(edge))
-                            .collect::<Vec<_>>()
-                    );
                     if transition.is_some() {
                         let transition = transition.unwrap();
                         if *transition != Transition::Epsilon {

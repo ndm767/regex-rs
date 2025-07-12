@@ -131,6 +131,72 @@ impl Nfa {
         ret
     }
 
+    pub fn add_modifier(&mut self, modifier: Option<TransitionModifier>) {
+        match modifier {
+            None => {}
+            Some(TransitionModifier::Star) => {
+                let final_state = State::new();
+                self.set_accepting_state(final_state);
+
+                if !self.transitions.contains_key(&State::Start) {
+                    self.transitions.insert(State::Start, HashMap::new());
+                }
+
+                let map = self.transitions.get_mut(&State::Start).unwrap();
+                if !map.contains_key(&Transition::Epsilon) {
+                    map.insert(Transition::Epsilon, Vec::new());
+                }
+                map.get_mut(&Transition::Epsilon)
+                    .unwrap()
+                    .push(State::Accepting);
+
+                if !self.transitions.contains_key(&final_state) {
+                    self.transitions.insert(final_state, HashMap::new());
+                }
+
+                let map = self.transitions.get_mut(&final_state).unwrap();
+                if !map.contains_key(&Transition::Epsilon) {
+                    map.insert(Transition::Epsilon, Vec::new());
+                }
+
+                map.get_mut(&Transition::Epsilon)
+                    .unwrap()
+                    .push(State::Start);
+            }
+
+            Some(TransitionModifier::Plus) => {
+                let mut new_nfa = self.clone();
+                new_nfa.add_modifier(Some(TransitionModifier::Star));
+                self.concat(&mut new_nfa);
+            }
+
+            Some(TransitionModifier::Question) => {
+                if !self.transitions.contains_key(&State::Start) {
+                    self.transitions.insert(State::Start, HashMap::new());
+                }
+
+                let map = self.transitions.get_mut(&State::Start).unwrap();
+                if !map.contains_key(&Transition::Epsilon) {
+                    map.insert(Transition::Epsilon, Vec::new());
+                }
+                map.get_mut(&Transition::Epsilon)
+                    .unwrap()
+                    .push(State::Accepting);
+            }
+
+            Some(TransitionModifier::Range(lower, upper)) => {
+                let template = self.clone();
+                for i in 1..upper {
+                    let mut new_nfa = template.clone();
+                    if i >= lower {
+                        new_nfa.add_modifier(Some(TransitionModifier::Question));
+                    }
+                    self.concat(&mut new_nfa);
+                }
+            }
+        }
+    }
+
     // change all transition entries with State::Start to new_start
     fn swap_state(&mut self, old_state: State, new_state: State) {
         let old_trans = self.transitions.remove(&old_state).unwrap();

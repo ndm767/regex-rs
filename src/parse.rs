@@ -14,9 +14,6 @@ pub enum ParseElement {
 
     Union, // |
 
-    Caret,  // ^ start of string or line
-    Dollar, // $ end of string or line
-
     Group(Vec<ParseElement>),   // (...)
     Bracket(Vec<char>),         // [A-Za-z]
     NegativeBracket(Vec<char>), // [^A-Za-z]
@@ -61,8 +58,6 @@ pub fn lex(input: String) -> Vec<ParseElement> {
             }
 
             '|' => curr.push(ParseElement::Union),
-            '^' => curr.push(ParseElement::Caret),
-            '$' => curr.push(ParseElement::Dollar),
 
             '(' => {
                 // new group
@@ -192,6 +187,20 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
             }
             ParseElement::Wildcard => {
                 curr_nfa.concat(&mut Nfa::new(Transition::Wildcard, modifier));
+            }
+            ParseElement::Bracket(chars) => {
+                let mut chars = chars.clone();
+                let mut new_nfa = Nfa::new(Transition::Literal(chars.pop().unwrap()), None);
+                while chars.len() > 0 {
+                    new_nfa.union(&mut Nfa::new(
+                        Transition::Literal(chars.pop().unwrap()),
+                        None,
+                    ));
+                }
+
+                new_nfa.add_modifier(modifier);
+
+                curr_nfa.concat(&mut new_nfa);
             }
             ParseElement::Star
             | ParseElement::Plus

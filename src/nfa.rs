@@ -64,69 +64,15 @@ impl Nfa {
     }
 
     pub fn new(edge: Transition, modifier: Option<TransitionModifier>) -> Self {
-        let mut transitions = HashMap::new();
-
-        let mut final_state = State::Accepting;
-        let mut plus_modifier = false;
-        let mut range: Option<(u64, u64)> = None;
-
-        match modifier {
-            Some(TransitionModifier::Star) => {
-                // handle star
-                final_state = State::new();
-                transitions.insert(
-                    State::Start,
-                    HashMap::from([(Transition::Epsilon, vec![State::Accepting])]),
-                );
-                transitions.insert(
-                    final_state,
-                    HashMap::from([(Transition::Epsilon, vec![State::Start])]),
-                );
-            }
-            Some(TransitionModifier::Plus) => {
-                plus_modifier = true;
-            }
-            Some(TransitionModifier::Question) => {
-                transitions.insert(
-                    State::Start,
-                    HashMap::from([(Transition::Epsilon, vec![State::Accepting])]),
-                );
-            }
-            Some(TransitionModifier::Range(mi, ma)) => {
-                range = Some((mi, ma));
-            }
-            _ => {}
-        }
-
-        if transitions.contains_key(&State::Start) {
-            transitions
-                .get_mut(&State::Start)
-                .unwrap()
-                .insert(edge, vec![final_state]);
-        } else {
-            transitions.insert(State::Start, HashMap::from([(edge, vec![final_state])]));
-        }
-
-        let mut ret = Nfa {
-            transitions: transitions,
+        let mut ret = Self {
+            transitions: HashMap::from([(
+                State::Start,
+                HashMap::from([(edge, vec![State::Accepting])]),
+            )]),
             empty: false,
         };
 
-        if plus_modifier {
-            // r+ = rr*
-            ret.concat(&mut Nfa::new(edge, Some(TransitionModifier::Star)));
-        } else if range.is_some() {
-            // r{min,max} = r.(min).rr?.(max-min).r?
-            let range = range.unwrap();
-            for i in 1..range.1 {
-                let modif = if i < range.0 {
-                    None
-                } else {
-                    Some(TransitionModifier::Question)
-                };
-                ret.concat(&mut Nfa::new(edge, modif));
-            }
-        }
+        ret.add_modifier(modifier);
 
         ret
     }

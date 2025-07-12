@@ -202,6 +202,11 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
 
                 curr_nfa.concat(&mut new_nfa);
             }
+            ParseElement::Group(grp) => {
+                let mut new_nfa = parse(grp.clone());
+                new_nfa.add_modifier(modifier);
+                curr_nfa.concat(&mut new_nfa);
+            }
             ParseElement::Star
             | ParseElement::Plus
             | ParseElement::Question

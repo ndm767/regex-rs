@@ -153,7 +153,9 @@ pub fn lex(input: String) -> Vec<ParseElement> {
 
 pub fn parse(toks: Vec<ParseElement>) -> Nfa {
     let mut curr_nfa = Nfa::empty();
+
     let mut union_stack = Vec::new();
+    let mut groups = Vec::new();
 
     let mut tok_iter = toks.iter().peekable();
 
@@ -204,6 +206,12 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
             }
             ParseElement::Group(grp) => {
                 let mut new_nfa = parse(grp.clone());
+                groups.push(new_nfa.clone());
+                new_nfa.add_modifier(modifier);
+                curr_nfa.concat(&mut new_nfa);
+            }
+            ParseElement::BackReference(n) => {
+                let mut new_nfa = groups[(*n as usize) - 1].clone();
                 new_nfa.add_modifier(modifier);
                 curr_nfa.concat(&mut new_nfa);
             }

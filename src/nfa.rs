@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static STATE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum State {
     Start,
     Accepting,
@@ -14,6 +14,14 @@ impl State {
     fn new() -> Self {
         Self::S(STATE_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
+
+    pub fn to_dot_node(&self) -> String {
+        match self {
+            Self::Start => "start".to_string(),
+            Self::Accepting => "accepting".to_string(),
+            Self::S(n) => format!("s{n}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -21,6 +29,16 @@ pub enum Transition {
     Literal(char),
     Wildcard,
     Epsilon, // Empty String
+}
+
+impl Transition {
+    pub fn to_dot_label(&self) -> String {
+        match self {
+            Self::Literal(c) => format!("'{c}'"),
+            Self::Wildcard => ".".to_string(),
+            Self::Epsilon => "ε".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -33,8 +51,7 @@ pub enum TransitionModifier {
 
 #[derive(Debug, Clone)]
 pub struct Nfa {
-    transitions: HashMap<State, HashMap<Transition, State>>,
-    merge_queue: Vec<(State, State)>,
+    pub transitions: HashMap<State, HashMap<Transition, Vec<State>>>,
     empty: bool,
 }
 
@@ -42,7 +59,6 @@ impl Nfa {
     pub fn empty() -> Self {
         Self {
             transitions: HashMap::new(),
-            merge_queue: Vec::new(),
             empty: true,
         }
     }
@@ -60,11 +76,11 @@ impl Nfa {
                 final_state = State::new();
                 transitions.insert(
                     State::Start,
-                    HashMap::from([(Transition::Epsilon, State::Accepting)]),
+                    HashMap::from([(Transition::Epsilon, vec![State::Accepting])]),
                 );
                 transitions.insert(
                     final_state,
-                    HashMap::from([(Transition::Epsilon, State::Start)]),
+                    HashMap::from([(Transition::Epsilon, vec![State::Start])]),
                 );
             }
             Some(TransitionModifier::Plus) => {
@@ -73,7 +89,7 @@ impl Nfa {
             Some(TransitionModifier::Question) => {
                 transitions.insert(
                     State::Start,
-                    HashMap::from([(Transition::Epsilon, State::Accepting)]),
+                    HashMap::from([(Transition::Epsilon, vec![State::Accepting])]),
                 );
             }
             Some(TransitionModifier::Range(mi, ma)) => {
@@ -86,14 +102,13 @@ impl Nfa {
             transitions
                 .get_mut(&State::Start)
                 .unwrap()
-                .insert(edge, final_state);
+                .insert(edge, vec![final_state]);
         } else {
-            transitions.insert(State::Start, HashMap::from([(edge, final_state)]));
+            transitions.insert(State::Start, HashMap::from([(edge, vec![final_state])]));
         }
 
         let mut ret = Nfa {
             transitions: transitions,
-            merge_queue: Vec::new(),
             empty: false,
         };
 
@@ -116,42 +131,6 @@ impl Nfa {
         ret
     }
 
-    pub fn simulate(&self, input: String) -> Result<(), char> {
-        let mut curr_state = State::Start;
-        let mut char_iter = input.chars().peekable();
-
-        while curr_state != State::Accepting {
-            if let Some(map) = self.transitions.get(&curr_state) {
-                if char_iter.peek().is_some() {
-                    let char = char_iter.peek().unwrap();
-                    if let Some(new_state) = map.get(&Transition::Literal(*char)) {
-                        let _ = char_iter.next();
-                        curr_state = *new_state;
-                    } else if let Some(new_state) = map.get(&Transition::Wildcard) {
-                        let _ = char_iter.next();
-                        curr_state = *new_state;
-                    } else if let Some(new_state) = map.get(&Transition::Epsilon) {
-                        curr_state = *new_state;
-                    } else {
-                        return Err(*char);
-                    }
-                } else if let Some(new_state) = map.get(&Transition::Epsilon) {
-                    curr_state = *new_state;
-                } else {
-                    return Err('x');
-                }
-            } else {
-                return Err('y');
-            }
-        }
-
-        if curr_state == State::Accepting && char_iter.peek().is_none() {
-            return Ok(());
-        }
-
-        Err('z')
-    }
-
     // change all transition entries with State::Start to new_start
     fn swap_state(&mut self, old_state: State, new_state: State) {
         let old_trans = self.transitions.remove(&old_state).unwrap();
@@ -159,9 +138,11 @@ impl Nfa {
             let row = self.transitions.get_mut(&new_state).unwrap();
             for (k, v) in old_trans.iter() {
                 if row.contains_key(k) {
-                    self.merge_queue.push((*row.get(k).unwrap(), *v));
+                    let mut new_vals = row.get(k).unwrap().clone();
+                    new_vals.append(&mut v.clone());
+                    row.insert(*k, new_vals);
                 } else {
-                    row.insert(*k, *v);
+                    row.insert(*k, v.clone());
                 }
             }
         } else {
@@ -170,8 +151,10 @@ impl Nfa {
 
         for map in self.transitions.values_mut() {
             for transition in map.values_mut() {
-                if *transition == old_state {
-                    *transition = new_state;
+                for state in transition.iter_mut() {
+                    if *state == old_state {
+                        *state = new_state;
+                    }
                 }
             }
         }
@@ -180,8 +163,10 @@ impl Nfa {
     fn set_accepting_state(&mut self, new_state: State) {
         for map in self.transitions.values_mut() {
             for transition in map.values_mut() {
-                if *transition == State::Accepting {
-                    *transition = new_state;
+                for state in transition.iter_mut() {
+                    if *state == State::Accepting {
+                        *state = new_state;
+                    }
                 }
             }
         }
@@ -216,8 +201,9 @@ impl Nfa {
                 let row = self.transitions.get_mut(entry.0).unwrap();
                 for transition in entry.1.iter() {
                     if row.contains_key(transition.0) {
-                        self.merge_queue
-                            .push((*row.get(transition.0).unwrap(), *transition.1));
+                        let mut new_vals = row.get(transition.0).unwrap().clone();
+                        new_vals.append(&mut transition.1.clone());
+                        row.insert(*transition.0, new_vals);
                     } else {
                         row.insert(*transition.0, transition.1.clone());
                     }
@@ -226,14 +212,52 @@ impl Nfa {
                 self.transitions.insert(*entry.0, entry.1.clone());
             }
         }
+    }
 
-        while self.merge_queue.len() > 0 {
-            let (a, b) = self.merge_queue.pop().unwrap();
+    pub fn epsilon_closure(&self, states: Vec<State>) -> BTreeSet<State> {
+        let mut stack = Vec::new();
+        let mut ret = BTreeSet::new();
 
-            let new_state = State::new();
-
-            self.swap_state(a, new_state);
-            self.swap_state(b, new_state);
+        for state in states.iter() {
+            ret.insert(*state);
+            stack.push(*state);
         }
+
+        while stack.len() != 0 {
+            let t = stack.pop().unwrap();
+            if let Some(trans) = self.transitions.get(&t) {
+                if let Some(epsilon_trans) = trans.get(&Transition::Epsilon) {
+                    for eps in epsilon_trans {
+                        if !ret.contains(eps) {
+                            ret.insert(*eps);
+                            stack.push(*eps);
+                        }
+                    }
+                }
+            }
+        }
+
+        ret
+    }
+
+    pub fn to_dot(&self) -> String {
+        let mut out = String::new();
+        for (start, map) in &self.transitions {
+            for (transition, states) in map {
+                for end in states {
+                    out.push_str(
+                        format!(
+                            "{} -> {} [label = \"{}\"];\n",
+                            start.to_dot_node(),
+                            end.to_dot_node(),
+                            transition.to_dot_label()
+                        )
+                        .as_str(),
+                    );
+                }
+            }
+        }
+
+        format!("digraph nfa {{\n{out}}}")
     }
 }

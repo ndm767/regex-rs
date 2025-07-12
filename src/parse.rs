@@ -7,10 +7,9 @@ pub enum ParseElement {
     Literal(char), // a single character
     Wildcard,      // . matches any character
 
-    Star,     // * matches 0 or more times
-    Plus,     // + matches 1 or more times
-    Question, // ? matches 0 or 1 times
-    #[allow(dead_code)]
+    Star,            // * matches 0 or more times
+    Plus,            // + matches 1 or more times
+    Question,        // ? matches 0 or 1 times
     Range(u64, u64), // a{3,5} matches aaa, aaaa, aaaaa
 
     Union, // |
@@ -18,16 +17,11 @@ pub enum ParseElement {
     Caret,  // ^ start of string or line
     Dollar, // $ end of string or line
 
-    #[allow(dead_code)]
-    Group(Vec<ParseElement>), // (...)
-    #[allow(dead_code)]
-    Bracket(Vec<char>), // [A-Za-z]
-    #[allow(dead_code)]
+    Group(Vec<ParseElement>),   // (...)
+    Bracket(Vec<char>),         // [A-Za-z]
     NegativeBracket(Vec<char>), // [^A-Za-z]
 
-    #[allow(dead_code)]
-    Class(char), // \w \W \d \D \s \S \b
-    #[allow(dead_code)]
+    Class(char),        // \w \W \d \D \s \S \b
     BackReference(u64), //\n where n>=1, POSIX regex only mandates 1-9
 }
 
@@ -188,20 +182,23 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
             }
             _ => None,
         };
-        match *tok {
+        match tok {
             ParseElement::Literal(c) => {
-                curr_nfa.concat(&mut Nfa::new(Transition::Literal(c), modifier));
+                curr_nfa.concat(&mut Nfa::new(Transition::Literal(*c), modifier));
             }
             ParseElement::Union => {
                 union_stack.push(curr_nfa);
                 curr_nfa = Nfa::empty();
             }
-            /*ParseElement::Wildcard => {
-                curr_nfa.add_transition(Transition::Wildcard);
+            ParseElement::Wildcard => {
+                curr_nfa.concat(&mut Nfa::new(Transition::Wildcard, modifier));
             }
-            ParseElement::Bracket(vals) => {
-                curr_nfa.add_transitions(vals.iter().map(|v| Transition::Literal(*v)).collect())
-            }*/
+            ParseElement::Star
+            | ParseElement::Plus
+            | ParseElement::Question
+            | ParseElement::Range(_, _) => {
+                panic!("Unexpected modifier!");
+            }
             _ => panic!("Unknown token {:?}", tok),
         }
     }

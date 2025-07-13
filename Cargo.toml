@@ -1,7 +1,8 @@
 [package]
-name = "grex"
+name = "regex-rs"
 version = "0.1.0"
 edition = "2024"
+authors = ["Nathan Medros <nathan.medros@gmail.com>"]
 
 [dependencies]
 colored = "3.0.0"

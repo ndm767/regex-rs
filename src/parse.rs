@@ -43,6 +43,11 @@ pub fn lex(input: String) -> Vec<ParseElement> {
             '+' => curr.push(ParseElement::Plus),
             '?' => curr.push(ParseElement::Question),
             '{' => {
+                // consume until digit
+                while !iter.peek().unwrap().is_digit(10) {
+                    let _ = iter.next();
+                }
+
                 // range
                 let (mut min, mut max) = (0u64, 0u64);
                 while iter.peek().unwrap().is_digit(10) {
@@ -50,19 +55,22 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                     min += iter.next().unwrap().to_digit(10).unwrap() as u64;
                 }
 
-                if !matches!(iter.next().unwrap(), ',') {
-                    panic!("Expected comma in range!")
+                // consume until comma
+                while !matches!(iter.next().unwrap(), ',') {}
+
+                // consume until next digit
+                while !iter.peek().unwrap().is_digit(10) {
+                    let _ = iter.next();
                 }
 
-                // TODO allow whitespace?
                 while iter.peek().unwrap().is_digit(10) {
                     max *= 10;
                     max += iter.next().unwrap().to_digit(10).unwrap() as u64;
                 }
 
-                if !matches!(iter.next().unwrap(), '}') {
-                    panic!("Expected close curly in range!");
-                }
+                // consume until close curly
+                while !matches!(iter.next().unwrap(), '}') {}
+
                 curr.push(ParseElement::Range(min, max));
             }
 

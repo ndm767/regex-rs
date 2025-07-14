@@ -22,6 +22,15 @@ pub enum ParseElement {
     BackReference(u64), //\n where n>=1, POSIX regex only mandates 1-9
 }
 
+impl ParseElement {
+    fn is_modifier(&self) -> bool {
+        match self {
+            Self::Star | Self::Plus | Self::Question | Self::Range(_, _) => true,
+            _ => false,
+        }
+    }
+}
+
 pub fn lex(input: String) -> Vec<ParseElement> {
     let mut iter = input.chars().peekable();
     let mut stack = Vec::new();
@@ -198,21 +207,18 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
 
     while let Some(tok) = tok_iter.next() {
         let modifier = match tok_iter.peek() {
-            Some(ParseElement::Star) => {
+            Some(m) if m.is_modifier() => {
+                #[allow(suspicious_double_ref_op)]
+                let m = m.clone();
                 let _ = tok_iter.next();
-                Some(TransitionModifier::Star)
-            }
-            Some(ParseElement::Plus) => {
-                let _ = tok_iter.next();
-                Some(TransitionModifier::Plus)
-            }
-            Some(ParseElement::Question) => {
-                let _ = tok_iter.next();
-                Some(TransitionModifier::Question)
-            }
-            Some(ParseElement::Range(mi, ma)) => {
-                let _ = tok_iter.next();
-                Some(TransitionModifier::Range(*mi, *ma))
+
+                Some(match m {
+                    ParseElement::Star => TransitionModifier::Star,
+                    ParseElement::Plus => TransitionModifier::Plus,
+                    ParseElement::Question => TransitionModifier::Question,
+                    ParseElement::Range(lo, hi) => TransitionModifier::Range(*lo, *hi),
+                    _ => unreachable!(),
+                })
             }
             _ => None,
         };

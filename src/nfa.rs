@@ -181,32 +181,6 @@ impl Nfa {
         ret
     }
 
-    pub fn reverse(&self) -> Nfa {
-        let mut new_trans: HashMap<State, HashMap<Transition, Vec<State>>> = HashMap::new();
-
-        for (start, map) in &self.transitions {
-            for (trans, end_states) in map {
-                for end in end_states {
-                    let new_start = if *end == State::Accepting {
-                        State::Start
-                    } else {
-                        *end
-                    };
-                    let new_end = if *start == State::Start {
-                        State::Accepting
-                    } else {
-                        *start
-                    };
-                    new_trans.add_transition(new_start, *trans, new_end);
-                }
-            }
-        }
-
-        Nfa {
-            transitions: new_trans,
-            empty: false,
-        }
-    }
     pub fn to_dot(&self) -> String {
         let mut out = String::new();
         for (start, map) in &self.transitions {

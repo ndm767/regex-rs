@@ -262,43 +262,6 @@ impl Dfa {
         }
     }
 
-    pub fn reverse(&self) -> Nfa {
-        let mut new_trans: HashMap<State, HashMap<Transition, Vec<State>>> = HashMap::new();
-
-        let mut state_table: HashMap<DfaState, State> = HashMap::new();
-
-        for (start, map) in &self.transitions {
-            if !state_table.contains_key(start) {
-                if self.start_state == *start {
-                    state_table.insert(start.clone(), State::Accepting);
-                } else {
-                    state_table.insert(start.clone(), State::new());
-                }
-            }
-
-            let new_start = *state_table.get(start).unwrap();
-
-            for (trans, end) in map {
-                if !state_table.contains_key(end) {
-                    if end.accepting {
-                        state_table.insert(end.clone(), State::Start);
-                    } else {
-                        state_table.insert(end.clone(), State::new());
-                    }
-                }
-
-                let new_end = state_table.get(end).unwrap();
-
-                new_trans.add_transition(*new_end, *trans, new_start);
-            }
-        }
-
-        Nfa {
-            transitions: new_trans,
-            empty: false,
-        }
-    }
-
     pub fn to_dot(&self, label: String) -> String {
         let mut edges = String::new();
         let mut nodes = HashMap::new();

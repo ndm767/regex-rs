@@ -29,10 +29,8 @@ fn show_dot(dot_file: String) -> Child {
 
 fn main() {
     let toks = lex(read!("{}\n"));
-    println!("toks: {:?}", toks);
 
     let nfa = parse(toks);
-    println!("nfa: {:?}", nfa);
 
     let mut dfa = Dfa::from_nfa(nfa.clone());
 

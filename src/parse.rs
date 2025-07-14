@@ -1,4 +1,5 @@
-use crate::nfa::{Transition, TransitionModifier};
+use crate::nfa::TransitionModifier;
+use crate::transition_table::Transition;
 
 use super::nfa::Nfa;
 

@@ -1,6 +1,7 @@
 mod dfa;
 mod nfa;
 mod parse;
+mod transition_table;
 
 use std::io::Write;
 use std::process::{Child, Command, Stdio};
@@ -33,10 +34,14 @@ fn main() {
     let nfa = parse(toks);
     println!("nfa: {:?}", nfa);
 
-    let dfa = Dfa::from_nfa(nfa.clone());
+    let mut dfa = Dfa::from_nfa(nfa.clone());
+
+    let mut dfa_non_min_child = show_dot(dfa.to_dot(String::from("Unminimized DFA")));
+
+    dfa.minimize();
 
     let mut nfa_child = show_dot(nfa.to_dot());
-    let mut dfa_child = show_dot(dfa.to_dot());
+    let mut dfa_child = show_dot(dfa.to_dot(String::from("Minimized DFA")));
 
     print!("{}", "> ".green().bold());
     let mut input: String = read!("{}\n");
@@ -53,4 +58,7 @@ fn main() {
 
     nfa_child.kill().expect("Failed to kill nfa child");
     dfa_child.kill().expect("Failed to kill dfa child");
+    dfa_non_min_child
+        .kill()
+        .expect("Failed to kill dfa non-minimized child");
 }

@@ -1,6 +1,9 @@
+#![allow(non_snake_case)]
+
 use std::collections::{BTreeSet, HashMap};
 
-use crate::nfa::{Nfa, State, Transition};
+use crate::nfa::Nfa;
+use crate::transition_table::{State, Transition, TransitionTable};
 
 #[derive(Debug)]
 pub enum SimError {
@@ -12,7 +15,7 @@ pub enum SimError {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
-struct DfaState {
+pub struct DfaState {
     pub internal: BTreeSet<State>,
     accepting: bool,
 }
@@ -58,6 +61,7 @@ impl DfaState {
 #[derive(Debug)]
 pub struct Dfa {
     transitions: HashMap<DfaState, HashMap<Transition, DfaState>>,
+    states: BTreeSet<DfaState>,
     start_state: DfaState,
 }
 
@@ -65,21 +69,24 @@ impl Dfa {
     pub fn from_nfa(nfa: Nfa) -> Self {
         let start_state = DfaState::from(nfa.epsilon_closure(vec![State::Start]));
         let mut transitions = HashMap::new();
+        let mut states = BTreeSet::from([start_state.clone()]);
 
         let mut seen = BTreeSet::new();
         let mut unmarked = BTreeSet::from([start_state.clone()]);
 
         while let Some(state) = unmarked.pop_first() {
             seen.insert(state.clone());
+
+            if !states.contains(&state) {
+                states.insert(state.clone());
+            }
+
             for internal in &state.internal {
                 if !nfa.transitions.contains_key(internal) {
                     continue;
                 }
                 for (transition, map) in nfa.transitions.get(internal).unwrap() {
                     let closure = DfaState::from(nfa.epsilon_closure(map.clone()));
-                    if !seen.contains(&closure) && !unmarked.contains(&closure) {
-                        unmarked.insert(closure.clone());
-                    }
 
                     if !transitions.contains_key(&state) {
                         transitions.insert(state.clone(), HashMap::new());
@@ -88,6 +95,10 @@ impl Dfa {
                     let row = transitions.get_mut(&state).unwrap();
                     if row.contains_key(transition) {
                         let curr_row: &mut DfaState = row.get_mut(transition).unwrap();
+
+                        unmarked.remove(&curr_row);
+                        unmarked.remove(&closure);
+
                         curr_row.internal = curr_row
                             .internal
                             .union(&closure.internal)
@@ -97,6 +108,11 @@ impl Dfa {
                         curr_row.accepting &= closure.accepting;
                     } else {
                         row.insert(*transition, closure);
+                    }
+
+                    let insertion = row.get(transition).unwrap();
+                    if !seen.contains(insertion) && !unmarked.contains(insertion) {
+                        unmarked.insert(insertion.clone());
                     }
                 }
             }
@@ -120,12 +136,133 @@ impl Dfa {
         */
 
         Self {
-            transitions: transitions,
-            start_state: start_state,
+            transitions,
+            states,
+            start_state,
         }
     }
 
-    pub fn to_dot(&self) -> String {
+    pub fn minimize(&mut self) {
+        // hopcroft's algorithm as described in (Hopcroft 1971) and (Xu 2009)
+
+        // create inverse transition table
+        // $ \delta^{-1}(s,a) = \{t|\delta(t, a) = s\} $
+        let mut inv_delta: HashMap<DfaState, HashMap<Transition, BTreeSet<DfaState>>> =
+            HashMap::new();
+
+        for (start, map) in &self.transitions {
+            for (trans, end) in map {
+                inv_delta.add_transition(end.clone(), *trans, start.clone());
+            }
+        }
+
+        let accepting = self
+            .states
+            .clone()
+            .iter()
+            .filter(|s| s.accepting)
+            .map(|s| s.clone())
+            .collect::<BTreeSet<_>>();
+
+        let nonaccepting = self
+            .states
+            .clone()
+            .iter()
+            .filter(|s| !s.accepting)
+            .map(|s| s.clone())
+            .collect::<BTreeSet<_>>();
+
+        let mut W = BTreeSet::from([accepting, nonaccepting]);
+        let mut P = W.clone();
+
+        while let Some(S) = W.pop_first() {
+            // $$ I_a \leftarrow \delta^{-1}(S, a)$$
+            let mut end_states = HashMap::new();
+            for state in S {
+                if !inv_delta.contains_key(&state) {
+                    continue;
+                }
+                for (in_trans, ends) in inv_delta.get(&state).unwrap() {
+                    if !end_states.contains_key(in_trans) {
+                        end_states.insert(*in_trans, BTreeSet::new());
+                    }
+                    end_states
+                        .get_mut(in_trans)
+                        .unwrap()
+                        .extend(ends.clone().iter().map(|s| s.clone()));
+                }
+            }
+
+            for (_, end_states) in end_states {
+                let P_clone = P.clone();
+                let old_P_iter = P_clone.iter();
+                for R in old_P_iter {
+                    let mut intersection =
+                        R.intersection(&end_states).map(|s| s.clone()).peekable();
+                    if intersection.peek().is_some() && !R.is_subset(&end_states) {
+                        let R1 = intersection.collect();
+                        let R2: BTreeSet<DfaState> = R.difference(&R1).map(|s| s.clone()).collect();
+
+                        P.remove(R);
+                        P.insert(R1.clone());
+                        P.insert(R2.clone());
+
+                        if W.contains(R) {
+                            W.remove(R);
+                            W.insert(R1);
+                            W.insert(R2);
+                        } else {
+                            if R1.len() <= R2.len() {
+                                W.insert(R1);
+                            } else {
+                                W.insert(R2);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut changes: HashMap<DfaState, DfaState> = HashMap::new();
+        for p in P {
+            if p.len() > 1 {
+                let mut new_state = DfaState {
+                    internal: BTreeSet::new(),
+                    accepting: false,
+                };
+                for state in &p {
+                    new_state.internal.extend(state.internal.clone());
+                    if new_state.accepting != state.accepting {
+                        panic!("Accepting mismatch!");
+                    }
+                    new_state.accepting |= state.accepting;
+                }
+
+                for state in p {
+                    changes.insert(state, new_state.clone());
+                }
+            }
+        }
+
+        for (old, new) in &changes {
+            if self.transitions.contains_key(old) {
+                let row = self.transitions.remove(old).unwrap();
+                self.transitions.insert(new.clone(), row);
+            }
+        }
+
+        for map in self.transitions.values_mut() {
+            let map_clone = map.clone();
+            let keys = map_clone.keys().collect::<Vec<_>>();
+            for key in keys {
+                if changes.contains_key(map.get(key).unwrap()) {
+                    map.insert(*key, changes.get(map.get(key).unwrap()).unwrap().clone());
+                }
+            }
+        }
+    }
+
+    pub fn to_dot(&self, label: String) -> String {
         let mut edges = String::new();
         let mut nodes = HashMap::new();
 
@@ -156,7 +293,7 @@ impl Dfa {
             acc
         });
 
-        format!("digraph dfa {{{node_str}\n{edges}}}")
+        format!("digraph dfa {{\ngraph [label=\"{label}\"];\n{node_str}\n{edges}}}")
     }
 
     pub fn simulate(&self, input: String) -> Result<(), SimError> {

@@ -1,45 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
-use std::sync::atomic::{AtomicU64, Ordering};
 
-static STATE_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum State {
-    Start,
-    Accepting,
-    S(u64),
-}
-
-impl State {
-    fn new() -> Self {
-        Self::S(STATE_COUNTER.fetch_add(1, Ordering::Relaxed))
-    }
-
-    pub fn to_dot_node(&self) -> String {
-        match self {
-            Self::Start => "start".to_string(),
-            Self::Accepting => "accepting".to_string(),
-            Self::S(n) => format!("s{n}"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Transition {
-    Literal(char),
-    Wildcard,
-    Epsilon, // Empty String
-}
-
-impl Transition {
-    pub fn to_dot_label(&self) -> String {
-        match self {
-            Self::Literal(c) => format!("'{c}'"),
-            Self::Wildcard => ".".to_string(),
-            Self::Epsilon => "ε".to_string(),
-        }
-    }
-}
+use crate::transition_table::{State, Transition, TransitionTable};
 
 #[derive(Debug, Clone, Copy)]
 pub enum TransitionModifier {
@@ -47,25 +8,6 @@ pub enum TransitionModifier {
     Plus,
     Question,
     Range(u64, u64),
-}
-
-trait TransitionTable<T> {
-    fn add_transition(&mut self, start: T, transition: Transition, end: T);
-}
-
-impl TransitionTable<State> for HashMap<State, HashMap<Transition, Vec<State>>> {
-    fn add_transition(&mut self, start: State, transition: Transition, end: State) {
-        if !self.contains_key(&start) {
-            self.insert(start, HashMap::new());
-        }
-
-        let map = self.get_mut(&start).unwrap();
-        if !map.contains_key(&transition) {
-            map.insert(transition, Vec::new());
-        }
-
-        map.get_mut(&transition).unwrap().push(end);
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -257,6 +199,6 @@ impl Nfa {
             }
         }
 
-        format!("digraph nfa {{\n{out}}}")
+        format!("digraph nfa {{\ngraph [label=\"NFA\"];\n{out}}}")
     }
 }

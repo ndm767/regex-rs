@@ -24,7 +24,7 @@ fn show_dot(dot_file: String) -> Child {
         .write_all(dot_file.as_bytes())
         .expect("Failed to write to stdin");
 
-    return dot_cmd;
+    dot_cmd
 }
 
 fn main() {
@@ -58,4 +58,10 @@ fn main() {
     dfa_non_min_child
         .kill()
         .expect("Failed to kill dfa non-minimized child");
+
+    nfa_child.wait().expect("nfa_child command wasn't running");
+    dfa_child.wait().expect("dfa_child command wasn't running");
+    dfa_non_min_child
+        .wait()
+        .expect("dfa_non_min_child command wasn't running");
 }

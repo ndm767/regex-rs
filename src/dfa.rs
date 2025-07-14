@@ -32,21 +32,23 @@ impl From<BTreeSet<State>> for DfaState {
 impl DfaState {
     fn to_dot_node_ref(&self) -> String {
         self.internal.iter().fold(String::new(), |mut acc, s| {
-            acc.push_str(s.to_dot_node().as_str());
+            acc.push_str(s.dot_node().as_str());
             acc
         })
     }
 
     fn to_dot_node_label(&self) -> String {
         let r = self.to_dot_node_ref();
-        let mut label = String::from("{");
+        let mut label = String::from('{');
+
         for state in &self.internal {
             if label.len() != 1 {
                 label.push_str(", ");
             }
-            label.push_str(state.to_dot_node().as_str());
+            label.push_str(state.dot_node().as_str());
         }
-        label.push_str("}");
+
+        label.push('}');
 
         let shape = if self.accepting {
             "doublecircle"
@@ -96,7 +98,7 @@ impl Dfa {
                     if row.contains_key(transition) {
                         let curr_row: &mut DfaState = row.get_mut(transition).unwrap();
 
-                        unmarked.remove(&curr_row);
+                        unmarked.remove(curr_row);
                         unmarked.remove(&closure);
 
                         curr_row.internal = curr_row
@@ -158,18 +160,16 @@ impl Dfa {
 
         let accepting = self
             .states
-            .clone()
             .iter()
             .filter(|s| s.accepting)
-            .map(|s| s.clone())
+            .cloned()
             .collect::<BTreeSet<_>>();
 
         let nonaccepting = self
             .states
-            .clone()
             .iter()
             .filter(|s| !s.accepting)
-            .map(|s| s.clone())
+            .cloned()
             .collect::<BTreeSet<_>>();
 
         let mut W = BTreeSet::from([accepting, nonaccepting]);
@@ -189,7 +189,7 @@ impl Dfa {
                     end_states
                         .get_mut(in_trans)
                         .unwrap()
-                        .extend(ends.clone().iter().map(|s| s.clone()));
+                        .extend(ends.iter().cloned());
                 }
             }
 
@@ -197,11 +197,10 @@ impl Dfa {
                 let P_clone = P.clone();
                 let old_P_iter = P_clone.iter();
                 for R in old_P_iter {
-                    let mut intersection =
-                        R.intersection(&end_states).map(|s| s.clone()).peekable();
+                    let mut intersection = R.intersection(&end_states).cloned().peekable();
                     if intersection.peek().is_some() && !R.is_subset(&end_states) {
                         let R1 = intersection.collect();
-                        let R2: BTreeSet<DfaState> = R.difference(&R1).map(|s| s.clone()).collect();
+                        let R2: BTreeSet<DfaState> = R.difference(&R1).cloned().collect();
 
                         P.remove(R);
                         P.insert(R1.clone());
@@ -211,12 +210,10 @@ impl Dfa {
                             W.remove(R);
                             W.insert(R1);
                             W.insert(R2);
+                        } else if R1.len() <= R2.len() {
+                            W.insert(R1);
                         } else {
-                            if R1.len() <= R2.len() {
-                                W.insert(R1);
-                            } else {
-                                W.insert(R2);
-                            }
+                            W.insert(R2);
                         }
                     }
                 }
@@ -281,7 +278,7 @@ impl Dfa {
                         "{} -> {} [label = \"{}\"];\n",
                         start_ref,
                         end_ref,
-                        transition.to_dot_label()
+                        transition.dot_label()
                     )
                     .as_str(),
                 );
@@ -302,7 +299,7 @@ impl Dfa {
         let mut char_iter = input.chars().peekable();
 
         while !curr_state.accepting {
-            if let Some(map) = self.transitions.get(&curr_state) {
+            if let Some(map) = self.transitions.get(curr_state) {
                 if char_iter.peek().is_some() {
                     let c = *char_iter.peek().unwrap();
                     let possible_edges = [
@@ -313,8 +310,7 @@ impl Dfa {
 
                     let transition = possible_edges.iter().find(|&edge| map.get(edge).is_some());
 
-                    if transition.is_some() {
-                        let transition = transition.unwrap();
+                    if let Some(transition) = transition {
                         if *transition != Transition::Epsilon {
                             let _ = char_iter.next();
                         }

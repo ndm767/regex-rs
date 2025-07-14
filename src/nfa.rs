@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{hash_map::Entry, BTreeSet, HashMap};
 
 use crate::transition_table::{State, Transition, TransitionTable};
 
@@ -85,7 +85,10 @@ impl Nfa {
     // change all transition entries with State::Start to new_start
     fn swap_state(&mut self, old_state: State, new_state: State) {
         let old_trans = self.transitions.remove(&old_state).unwrap();
-        if self.transitions.contains_key(&new_state) {
+
+        if let Entry::Vacant(e) = self.transitions.entry(new_state) {
+            e.insert(old_trans);
+        } else {
             let row = self.transitions.get_mut(&new_state).unwrap();
             for (k, v) in old_trans.iter() {
                 if row.contains_key(k) {
@@ -96,8 +99,6 @@ impl Nfa {
                     row.insert(*k, v.clone());
                 }
             }
-        } else {
-            self.transitions.insert(new_state, old_trans);
         }
 
         for map in self.transitions.values_mut() {
@@ -164,15 +165,14 @@ impl Nfa {
             stack.push(*state);
         }
 
-        while stack.len() != 0 {
-            let t = stack.pop().unwrap();
-            if let Some(trans) = self.transitions.get(&t) {
-                if let Some(epsilon_trans) = trans.get(&Transition::Epsilon) {
-                    for eps in epsilon_trans {
-                        if !ret.contains(eps) {
-                            ret.insert(*eps);
-                            stack.push(*eps);
-                        }
+        while let Some(t) = stack.pop() {
+            if let Some(trans) = self.transitions.get(&t)
+                && let Some(epsilon_trans) = trans.get(&Transition::Epsilon)
+            {
+                for eps in epsilon_trans {
+                    if !ret.contains(eps) {
+                        ret.insert(*eps);
+                        stack.push(*eps);
                     }
                 }
             }
@@ -189,9 +189,9 @@ impl Nfa {
                     out.push_str(
                         format!(
                             "{} -> {} [label = \"{}\"];\n",
-                            start.to_dot_node(),
-                            end.to_dot_node(),
-                            transition.to_dot_label()
+                            start.dot_node(),
+                            end.dot_node(),
+                            transition.dot_label()
                         )
                         .as_str(),
                     );

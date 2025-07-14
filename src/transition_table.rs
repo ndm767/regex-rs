@@ -12,16 +12,11 @@ where
     T: StateContainer<S>,
 {
     fn add_transition(&mut self, start: S, transition: Transition, end: S) {
-        if !self.contains_key(&start) {
-            self.insert(start.clone(), HashMap::new());
-        }
-
-        let map = self.get_mut(&start).unwrap();
-        if !map.contains_key(&transition) {
-            map.insert(transition, T::new_container());
-        }
-
-        map.get_mut(&transition).unwrap().insert_state(end);
+        self.entry(start)
+            .or_default()
+            .entry(transition)
+            .or_insert(T::new_container())
+            .insert_state(end);
     }
 }
 trait StateContainer<T> {
@@ -66,7 +61,7 @@ impl State {
         Self::S(STATE_COUNTER.fetch_add(1, Ordering::Relaxed))
     }
 
-    pub fn to_dot_node(&self) -> String {
+    pub fn dot_node(&self) -> String {
         match self {
             Self::Start => "start".to_string(),
             Self::Accepting => "accepting".to_string(),
@@ -83,7 +78,7 @@ pub enum Transition {
 }
 
 impl Transition {
-    pub fn to_dot_label(&self) -> String {
+    pub fn dot_label(&self) -> String {
         match self {
             Self::Literal(c) => format!("'{c}'"),
             Self::Wildcard => ".".to_string(),

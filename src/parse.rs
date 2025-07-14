@@ -24,10 +24,10 @@ pub enum ParseElement {
 
 impl ParseElement {
     fn is_modifier(&self) -> bool {
-        match self {
-            Self::Star | Self::Plus | Self::Question | Self::Range(_, _) => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            Self::Star | Self::Plus | Self::Question | Self::Range(_, _)
+        )
     }
 }
 
@@ -44,13 +44,13 @@ pub fn lex(input: String) -> Vec<ParseElement> {
             '?' => curr.push(ParseElement::Question),
             '{' => {
                 // consume until digit
-                while !iter.peek().unwrap().is_digit(10) {
+                while !iter.peek().unwrap().is_ascii_digit() {
                     let _ = iter.next();
                 }
 
                 // range
                 let (mut min, mut max) = (0u64, 0u64);
-                while iter.peek().unwrap().is_digit(10) {
+                while iter.peek().unwrap().is_ascii_digit() {
                     min *= 10;
                     min += iter.next().unwrap().to_digit(10).unwrap() as u64;
                 }
@@ -59,11 +59,11 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                 while !matches!(iter.next().unwrap(), ',') {}
 
                 // consume until next digit
-                while !iter.peek().unwrap().is_digit(10) {
+                while !iter.peek().unwrap().is_ascii_digit() {
                     let _ = iter.next();
                 }
 
-                while iter.peek().unwrap().is_digit(10) {
+                while iter.peek().unwrap().is_ascii_digit() {
                     max *= 10;
                     max += iter.next().unwrap().to_digit(10).unwrap() as u64;
                 }
@@ -179,7 +179,7 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                     '0'..='9' => {
                         // digits
                         let mut n: u64 = next.to_digit(10).unwrap() as u64;
-                        while iter.peek().unwrap().is_digit(10) {
+                        while iter.peek().unwrap().is_ascii_digit() {
                             n *= 10;
                             n += iter.next().unwrap().to_digit(10).unwrap() as u64;
                         }
@@ -190,7 +190,7 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                         curr.push(ParseElement::Literal(next));
                     }
                     _ => {
-                        panic!("Unknown escape sequence {}", next);
+                        panic!("Unknown escape sequence {next}");
                     }
                 }
             }
@@ -198,7 +198,7 @@ pub fn lex(input: String) -> Vec<ParseElement> {
         }
     }
 
-    if stack.len() != 0 {
+    if !stack.is_empty() {
         panic!("Unfinished stack!");
     }
 
@@ -244,7 +244,7 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
             ParseElement::Bracket(chars) => {
                 let mut chars = chars.clone();
                 let mut new_nfa = Nfa::new(Transition::Literal(chars.pop().unwrap()), None);
-                while chars.len() > 0 {
+                while !chars.is_empty() {
                     new_nfa.union(&mut Nfa::new(
                         Transition::Literal(chars.pop().unwrap()),
                         None,
@@ -272,11 +272,11 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
             | ParseElement::Range(_, _) => {
                 panic!("Unexpected modifier!");
             }
-            _ => panic!("Unknown token {:?}", tok),
+            _ => panic!("Unknown token {tok:?}"),
         }
     }
 
-    while union_stack.len() > 0 {
+    while !union_stack.is_empty() {
         curr_nfa.union(&mut union_stack.pop().unwrap());
     }
     curr_nfa

@@ -142,11 +142,6 @@ impl Dfa {
         }
     }
 
-    pub fn from_nfa_brzozowski(nfa: Nfa) -> Self {
-        // Uses Brzozowski's algorithm to minimize DFA after construction
-        Dfa::from_nfa(Dfa::from_nfa(nfa.reverse()).reverse())
-    }
-
     pub fn minimize(&mut self) {
         // hopcroft's algorithm as described in (Hopcroft 1971) and (Xu 2009)
 

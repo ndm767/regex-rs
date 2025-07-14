@@ -36,13 +36,9 @@ fn main() {
     let mut dfa_non_min_child = show_dot(dfa.to_dot(String::from("Unminimized DFA")));
     dfa.minimize();
 
-    let dfa_brzozowski = Dfa::from_nfa_brzozowski(nfa.clone());
-
     let mut nfa_child = show_dot(nfa.to_dot());
     let mut dfa_child =
         show_dot(dfa.to_dot(String::from("DFA minimized with Hopcroft's algorithm")));
-    let mut rev_dfa_child =
-        show_dot(dfa_brzozowski.to_dot(String::from("DFA minimized with Brzozowski's algorithm")));
 
     print!("{}", "> ".green().bold());
     let mut input: String = read!("{}\n");
@@ -62,5 +58,4 @@ fn main() {
     dfa_non_min_child
         .kill()
         .expect("Failed to kill dfa non-minimized child");
-    rev_dfa_child.kill().expect("msg");
 }

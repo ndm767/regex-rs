@@ -142,6 +142,11 @@ impl Dfa {
         }
     }
 
+    pub fn from_nfa_brzozowski(nfa: Nfa) -> Self {
+        // Uses Brzozowski's algorithm to minimize DFA after construction
+        Dfa::from_nfa(Dfa::from_nfa(nfa.reverse()).reverse())
+    }
+
     pub fn minimize(&mut self) {
         // hopcroft's algorithm as described in (Hopcroft 1971) and (Xu 2009)
 
@@ -259,6 +264,43 @@ impl Dfa {
                     map.insert(*key, changes.get(map.get(key).unwrap()).unwrap().clone());
                 }
             }
+        }
+    }
+
+    pub fn reverse(&self) -> Nfa {
+        let mut new_trans: HashMap<State, HashMap<Transition, Vec<State>>> = HashMap::new();
+
+        let mut state_table: HashMap<DfaState, State> = HashMap::new();
+
+        for (start, map) in &self.transitions {
+            if !state_table.contains_key(start) {
+                if self.start_state == *start {
+                    state_table.insert(start.clone(), State::Accepting);
+                } else {
+                    state_table.insert(start.clone(), State::new());
+                }
+            }
+
+            let new_start = *state_table.get(start).unwrap();
+
+            for (trans, end) in map {
+                if !state_table.contains_key(end) {
+                    if end.accepting {
+                        state_table.insert(end.clone(), State::Start);
+                    } else {
+                        state_table.insert(end.clone(), State::new());
+                    }
+                }
+
+                let new_end = state_table.get(end).unwrap();
+
+                new_trans.add_transition(*new_end, *trans, new_start);
+            }
+        }
+
+        Nfa {
+            transitions: new_trans,
+            empty: false,
         }
     }
 

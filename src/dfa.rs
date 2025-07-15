@@ -239,7 +239,7 @@ impl Dfa {
         }
     }
 
-    pub fn to_dot(&self, label: String) -> String {
+    pub fn to_dot(&self, label: &str) -> String {
         let mut edges = String::new();
         let mut nodes = HashMap::new();
 

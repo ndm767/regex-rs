@@ -27,18 +27,50 @@ fn show_dot(dot_file: String) -> Child {
     dot_cmd
 }
 
+fn write_dot(filename: &str, dot_file: String) {
+    #[allow(clippy::zombie_processes)]
+    let mut dot_cmd = Command::new("dot")
+        .args(["-T", "png", "-o", filename])
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn dot process");
+
+    let mut stdin = dot_cmd.stdin.take().expect("Failed to open stdin");
+    stdin
+        .write_all(dot_file.as_bytes())
+        .expect("Failed to write to stdin");
+}
+
 fn main() {
+    let args = std::env::args();
+    let should_write = args
+        .collect::<Vec<_>>()
+        .contains(&String::from("--output-png"));
+
     let toks = lex(read!("{}\n"));
 
     let nfa = parse(toks);
 
     let mut dfa = Dfa::from_nfa(nfa.clone());
-    let mut dfa_non_min_child = show_dot(dfa.to_dot(String::from("Unminimized DFA")));
+    let mut dfa_non_min_child = show_dot(dfa.to_dot("Unminimized DFA"));
+    if should_write {
+        write_dot("./dfa_nonmin.png", dfa.to_dot("Unminimized DFA"));
+    }
+
     dfa.minimize();
 
     let mut nfa_child = show_dot(nfa.to_dot());
-    let mut dfa_child =
-        show_dot(dfa.to_dot(String::from("DFA minimized with Hopcroft's algorithm")));
+    if should_write {
+        write_dot("./nfa.png", nfa.to_dot());
+    }
+
+    let mut dfa_child = show_dot(dfa.to_dot("DFA minimized with Hopcroft's algorithm"));
+    if should_write {
+        write_dot(
+            "./dfa_min.png",
+            dfa.to_dot("DFA minimized with Hopcroft's algorithm"),
+        );
+    }
 
     print!("{}", "> ".green().bold());
     let mut input: String = read!("{}\n");

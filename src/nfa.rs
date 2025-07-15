@@ -1,4 +1,4 @@
-use std::collections::{hash_map::Entry, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 
 use crate::transition_table::{State, Transition, TransitionTable};
 
@@ -82,36 +82,6 @@ impl Nfa {
         }
     }
 
-    // change all transition entries with State::Start to new_start
-    fn swap_state(&mut self, old_state: State, new_state: State) {
-        let old_trans = self.transitions.remove(&old_state).unwrap();
-
-        if let Entry::Vacant(e) = self.transitions.entry(new_state) {
-            e.insert(old_trans);
-        } else {
-            let row = self.transitions.get_mut(&new_state).unwrap();
-            for (k, v) in old_trans.iter() {
-                if row.contains_key(k) {
-                    let mut new_vals = row.get(k).unwrap().clone();
-                    new_vals.append(&mut v.clone());
-                    row.insert(*k, new_vals);
-                } else {
-                    row.insert(*k, v.clone());
-                }
-            }
-        }
-
-        for map in self.transitions.values_mut() {
-            for transition in map.values_mut() {
-                for state in transition.iter_mut() {
-                    if *state == old_state {
-                        *state = new_state;
-                    }
-                }
-            }
-        }
-    }
-
     fn set_accepting_state(&mut self, new_state: State) {
         for map in self.transitions.values_mut() {
             for transition in map.values_mut() {
@@ -138,11 +108,11 @@ impl Nfa {
         let mut other = other.to_owned();
 
         // set other's start to new state
-        other.swap_state(State::Start, new_state);
+        other.transitions.rename(State::Start, new_state);
 
         // copy other's transition table over to self
-        for transition in other.transitions {
-            self.transitions.insert(transition.0, transition.1);
+        for (start, map) in &other.transitions {
+            self.transitions.insert(*start, map.clone());
         }
     }
 

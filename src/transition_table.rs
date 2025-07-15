@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 pub trait TransitionTable<T> {
     fn add_transition(&mut self, start: T, transition: Transition, end: T);
+    fn rename(&mut self, old: T, new: T);
 }
 
 impl<S, T> TransitionTable<S> for HashMap<S, HashMap<Transition, T>>
@@ -18,19 +19,48 @@ where
             .or_insert(T::new_container())
             .insert_state(end);
     }
+    fn rename(&mut self, old: S, new: S) {
+        if self.contains_key(&old) {
+            let row = self.remove(&old).unwrap();
+            self.insert(new.clone(), row);
+        }
+
+        for (_, map) in self.iter_mut() {
+            for end in map.values_mut() {
+                if end.contains_state(&old) {
+                    end.replace_state(&old, new.clone());
+                }
+            }
+        }
+    }
 }
+
 trait StateContainer<T> {
     fn new_container() -> Self;
     fn insert_state(&mut self, v: T);
+    fn contains_state(&self, v: &T) -> bool;
+    fn replace_state(&mut self, old: &T, new: T);
 }
 
-impl<T> StateContainer<T> for Vec<T> {
+impl<T: PartialEq + Clone> StateContainer<T> for Vec<T> {
     fn new_container() -> Self {
         Self::new()
     }
 
     fn insert_state(&mut self, v: T) {
         self.push(v);
+    }
+
+    fn contains_state(&self, v: &T) -> bool {
+        self.contains(v)
+    }
+
+    fn replace_state(&mut self, old: &T, new: T) {
+        self.iter_mut().for_each(|v| {
+            if *v == *old {
+                *v = new.clone()
+            }
+        });
     }
 }
 
@@ -44,6 +74,16 @@ where
 
     fn insert_state(&mut self, v: T) {
         self.insert(v);
+    }
+
+    fn contains_state(&self, v: &T) -> bool {
+        self.contains(v)
+    }
+
+    fn replace_state(&mut self, old: &T, new: T) {
+        if self.remove(old) {
+            self.insert(new);
+        }
     }
 }
 

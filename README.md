@@ -4,9 +4,9 @@ Regex automata construction, minimization, visualization, and simulation.
 
 ## Example `ab(34)+|12(34)*`
 
-![NFA](./doc/nfa1.png)
-![Unminimized DFA](./doc/dfa_nonmin1.png)
-![Minimized DFA](./doc/dfa_min1.png)
+<img src="./doc/nfa1.png" width="25%">
+<img src="./doc/dfa_nonmin1.png" width="25%">
+<img src="./doc/dfa_min1.png" width="25%">
 
 ## Dependencies
 

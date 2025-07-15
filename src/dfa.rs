@@ -24,7 +24,7 @@ impl From<BTreeSet<State>> for DfaState {
     fn from(value: BTreeSet<State>) -> Self {
         Self {
             internal: value.clone(),
-            accepting: value.len() == 1 && value.contains(&State::Accepting),
+            accepting: value.contains(&State::Accepting),
         }
     }
 }
@@ -107,7 +107,7 @@ impl Dfa {
                             .cloned()
                             .collect();
 
-                        curr_row.accepting &= closure.accepting;
+                        curr_row.accepting |= closure.accepting;
                     } else {
                         row.insert(*transition, closure);
                     }
@@ -119,23 +119,6 @@ impl Dfa {
                 }
             }
         }
-
-        /* TODO: is it possible for a valid regex to have disjoint accepting states? ab?|abc is not well-formed
-        let mut accepting_transitions = transitions.clone();
-        for map in accepting_transitions.values_mut() {
-            for state in map.values_mut() {
-                // check if state is accepting
-                if !transitions.contains_key(state)
-                    || !transitions
-                        .get(state)
-                        .unwrap()
-                        .contains_key(&Transition::Epsilon)
-                {
-                    state.accepting = true;
-                }
-            }
-        }
-        */
 
         Self {
             transitions,
@@ -229,9 +212,6 @@ impl Dfa {
                 };
                 for state in &p {
                     new_state.internal.extend(state.internal.clone());
-                    if new_state.accepting != state.accepting {
-                        panic!("Accepting mismatch!");
-                    }
                     new_state.accepting |= state.accepting;
                 }
 
@@ -297,8 +277,9 @@ impl Dfa {
         let mut curr_state = &self.start_state;
 
         let mut char_iter = input.chars().peekable();
+        let mut accepted = false;
 
-        while !curr_state.accepting {
+        while !accepted {
             if let Some(map) = self.transitions.get(curr_state) {
                 if char_iter.peek().is_some() {
                     let c = *char_iter.peek().unwrap();
@@ -316,14 +297,20 @@ impl Dfa {
                         }
 
                         curr_state = map.get(transition).unwrap();
+                    } else if curr_state.accepting {
+                        accepted = true;
                     } else {
                         return Err(SimError::NoMatch(c));
                     }
                 } else if let Some(new_state) = map.get(&Transition::Epsilon) {
                     curr_state = new_state;
+                } else if curr_state.accepting {
+                    accepted = true;
                 } else {
                     return Err(SimError::EndOfString);
                 }
+            } else if curr_state.accepting {
+                accepted = true;
             } else {
                 return Err(SimError::NoTransitions);
             }

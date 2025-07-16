@@ -2,7 +2,7 @@
 
 Regex automata construction, minimization, visualization, and simulation.
 
-## Example `ab(34)+|12(34)*`
+## Example: `ab(34)+|12(34)*`
 
 <img src="./doc/nfa1.png" width="25%"><img src="./doc/dfa_nonmin1.png" width="25%"><img src="./doc/dfa_min1.png" width="25%">
 
@@ -18,9 +18,9 @@ All base regex operations (concatenation, union (`|`), groups (`(...)`), and Kle
 
 Additionally supported:
 
-- Wildcard `.` (WIP)
-- Multiplicity metacharacters `+`, `?`
-- Multiplicity ranges `{min, max}`
+- Wildcard `.`
+- Repetition metacharacters `+`, `?`
+- Repetition ranges `{min, max}`
 - Character ranges `[...]`
 - Character classes `\w`, `\d`, `\s`
 - Scoped backreferences (`\n` where `1 <= n <= u64::MAX`)

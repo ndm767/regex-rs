@@ -14,7 +14,7 @@ pub enum SimError {
     Premature,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Default)]
 pub struct DfaState {
     pub internal: BTreeSet<NfaState>,
     accepting: bool,
@@ -30,6 +30,11 @@ impl From<BTreeSet<NfaState>> for DfaState {
 }
 
 impl DfaState {
+    fn merge(&mut self, other: DfaState) {
+        self.internal = self.internal.union(&other.internal).cloned().collect();
+        self.accepting |= other.accepting;
+    }
+
     fn to_dot_node_ref(&self) -> String {
         self.internal.iter().fold(String::new(), |mut acc, s| {
             acc.push_str(s.dot_node().as_str());
@@ -70,7 +75,7 @@ pub struct Dfa {
 impl Dfa {
     pub fn from_nfa(nfa: Nfa) -> Self {
         let start_state = DfaState::from(nfa.epsilon_closure(vec![NfaState::Start]));
-        let mut transitions = HashMap::new();
+        let mut transitions: HashMap<DfaState, HashMap<Transition, DfaState>> = HashMap::new();
         let mut states = BTreeSet::from([start_state.clone()]);
 
         let mut seen = BTreeSet::new();
@@ -83,43 +88,54 @@ impl Dfa {
                 states.insert(state.clone());
             }
 
+            // find all transitions out of the state set
+            let mut possible: HashMap<Transition, Vec<NfaState>> = HashMap::new();
+
             for internal in &state.internal {
                 if !nfa.transitions.contains_key(internal) {
                     continue;
                 }
-                for (transition, map) in nfa.transitions.get(internal).unwrap() {
+
+                for (transition, ends) in nfa.transitions.get(internal).unwrap() {
                     if *transition == Transition::Epsilon {
                         continue;
                     }
 
-                    let closure = DfaState::from(nfa.epsilon_closure(map.clone()));
+                    possible
+                        .entry(*transition)
+                        .or_default()
+                        .extend(ends.clone());
+                }
+            }
 
-                    if !transitions.contains_key(&state) {
-                        transitions.insert(state.clone(), HashMap::new());
+            // If there is a wildcard transition, add its end states to every other transition
+            // this allows for expressions such as a.?b
+            if possible.contains_key(&Transition::Wildcard) {
+                let wildcards = possible.get(&Transition::Wildcard).unwrap().clone();
+                for (trans, ends) in possible.iter_mut() {
+                    if *trans != Transition::Wildcard {
+                        ends.extend(wildcards.clone());
                     }
+                }
+            }
 
-                    let row = transitions.get_mut(&state).unwrap();
-                    if row.contains_key(transition) {
-                        let curr_row: &mut DfaState = row.get_mut(transition).unwrap();
+            // loop through each transition
+            for (trans, ends) in possible {
+                let closure = DfaState::from(nfa.epsilon_closure(ends));
+                if !transitions.contains_key(&state) {
+                    transitions.insert(state.clone(), HashMap::new());
+                }
 
-                        unmarked.remove(curr_row);
-                        unmarked.remove(&closure);
+                transitions
+                    .get_mut(&state)
+                    .unwrap()
+                    .entry(trans)
+                    .or_default()
+                    .merge(closure);
 
-                        curr_row.internal = curr_row
-                            .internal
-                            .union(&closure.internal)
-                            .cloned()
-                            .collect();
-
-                        curr_row.accepting |= closure.accepting;
-                    } else {
-                        row.insert(*transition, closure);
-                    }
-
-                    let insertion = row.get(transition).unwrap();
-                    if !seen.contains(insertion) && !unmarked.contains(insertion) {
-                        unmarked.insert(insertion.clone());
-                    }
+                let insertion = transitions.get(&state).unwrap().get(&trans).unwrap();
+                if !seen.contains(insertion) && !unmarked.contains(insertion) {
+                    unmarked.insert(insertion.clone());
                 }
             }
         }

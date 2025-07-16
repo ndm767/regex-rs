@@ -1,4 +1,3 @@
-use crate::nfa::TransitionModifier;
 use crate::transition_table::Transition;
 
 use super::nfa::Nfa;
@@ -12,6 +11,7 @@ pub enum ParseElement {
     Plus,            // + matches 1 or more times
     Question,        // ? matches 0 or 1 times
     Range(u64, u64), // a{3,5} matches aaa, aaaa, aaaaa
+    OpenRange(u64),  // a{n,} matches a n or more times
 
     Union, // |
 
@@ -25,7 +25,7 @@ impl ParseElement {
     fn is_modifier(&self) -> bool {
         matches!(
             self,
-            Self::Star | Self::Plus | Self::Question | Self::Range(_, _)
+            Self::Star | Self::Plus | Self::Question | Self::Range(_, _) | Self::OpenRange(_)
         )
     }
 }
@@ -73,28 +73,44 @@ pub fn lex(input: String) -> Vec<ParseElement> {
 
                 // range
                 let (mut min, mut max) = (0u64, 0u64);
+                let mut done = false;
+
                 while iter.peek().unwrap().is_ascii_digit() {
                     min *= 10;
                     min += iter.next().unwrap().to_digit(10).unwrap() as u64;
                 }
 
-                // consume until comma
-                while !matches!(iter.next().unwrap(), ',') {}
-
-                // consume until next digit
-                while !iter.peek().unwrap().is_ascii_digit() {
+                // consume until comma or close curly
+                while !matches!(iter.peek().unwrap(), ',') && !matches!(iter.peek().unwrap(), '}') {
                     let _ = iter.next();
                 }
 
-                while iter.peek().unwrap().is_ascii_digit() {
-                    max *= 10;
-                    max += iter.next().unwrap().to_digit(10).unwrap() as u64;
+                // exact range, i.e. a{3}
+                if iter.next().unwrap() == '}' {
+                    curr.push(ParseElement::Range(min, min));
+                    done = true;
                 }
 
-                // consume until close curly
-                while !matches!(iter.next().unwrap(), '}') {}
+                // consume until next digit
+                while !done && !iter.peek().unwrap().is_ascii_digit() {
+                    // open range, i.e. a{3,}
+                    if iter.next().unwrap() == '}' {
+                        curr.push(ParseElement::OpenRange(min));
+                        done = true;
+                    }
+                }
 
-                curr.push(ParseElement::Range(min, max));
+                if !done {
+                    while iter.peek().unwrap().is_ascii_digit() {
+                        max *= 10;
+                        max += iter.next().unwrap().to_digit(10).unwrap() as u64;
+                    }
+
+                    // consume until close curly
+                    while !matches!(iter.next().unwrap(), '}') {}
+
+                    curr.push(ParseElement::Range(min, max));
+                }
             }
 
             '|' => curr.push(ParseElement::Union),
@@ -201,19 +217,7 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
 
     while let Some(tok) = tok_iter.next() {
         let modifier = match tok_iter.peek() {
-            Some(m) if m.is_modifier() => {
-                #[allow(suspicious_double_ref_op)]
-                let m = m.clone();
-                let _ = tok_iter.next();
-
-                Some(match m {
-                    ParseElement::Star => TransitionModifier::Star,
-                    ParseElement::Plus => TransitionModifier::Plus,
-                    ParseElement::Question => TransitionModifier::Question,
-                    ParseElement::Range(lo, hi) => TransitionModifier::Range(*lo, *hi),
-                    _ => unreachable!(),
-                })
-            }
+            Some(m) if m.is_modifier() => Some(tok_iter.next().unwrap().clone()),
             _ => None,
         };
         match tok {
@@ -255,7 +259,8 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
             ParseElement::Star
             | ParseElement::Plus
             | ParseElement::Question
-            | ParseElement::Range(_, _) => {
+            | ParseElement::Range(_, _)
+            | ParseElement::OpenRange(_) => {
                 panic!("Unexpected modifier!");
             }
         }

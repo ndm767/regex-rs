@@ -1,14 +1,9 @@
 use std::collections::{BTreeSet, HashMap};
 
-use crate::transition_table::{NfaState, Transition, TransitionTable};
-
-#[derive(Debug, Clone, Copy)]
-pub enum TransitionModifier {
-    Star,
-    Plus,
-    Question,
-    Range(u64, u64),
-}
+use crate::{
+    parse::ParseElement,
+    transition_table::{NfaState, Transition, TransitionTable},
+};
 
 #[derive(Debug, Clone)]
 pub struct Nfa {
@@ -24,7 +19,7 @@ impl Nfa {
         }
     }
 
-    pub fn new(edge: Transition, modifier: Option<TransitionModifier>) -> Self {
+    pub fn new(edge: Transition, modifier: Option<ParseElement>) -> Self {
         let mut ret = Self {
             transitions: HashMap::from([(
                 NfaState::Start,
@@ -38,10 +33,9 @@ impl Nfa {
         ret
     }
 
-    pub fn add_modifier(&mut self, modifier: Option<TransitionModifier>) {
+    pub fn add_modifier(&mut self, modifier: Option<ParseElement>) {
         match modifier {
-            None => {}
-            Some(TransitionModifier::Star) => {
+            Some(ParseElement::Star) => {
                 let final_state = NfaState::new();
                 self.set_accepting_state(final_state);
 
@@ -55,13 +49,13 @@ impl Nfa {
                     .add_transition(final_state, Transition::Epsilon, NfaState::Start);
             }
 
-            Some(TransitionModifier::Plus) => {
+            Some(ParseElement::Plus) => {
                 let mut new_nfa = self.clone();
-                new_nfa.add_modifier(Some(TransitionModifier::Star));
+                new_nfa.add_modifier(Some(ParseElement::Star));
                 self.concat(&mut new_nfa);
             }
 
-            Some(TransitionModifier::Question) => {
+            Some(ParseElement::Question) => {
                 self.transitions.add_transition(
                     NfaState::Start,
                     Transition::Epsilon,
@@ -69,16 +63,29 @@ impl Nfa {
                 );
             }
 
-            Some(TransitionModifier::Range(lower, upper)) => {
+            Some(ParseElement::Range(lower, upper)) => {
                 let template = self.clone();
                 for i in 1..upper {
                     let mut new_nfa = template.clone();
                     if i >= lower {
-                        new_nfa.add_modifier(Some(TransitionModifier::Question));
+                        new_nfa.add_modifier(Some(ParseElement::Question));
                     }
                     self.concat(&mut new_nfa);
                 }
             }
+
+            Some(ParseElement::OpenRange(start)) => {
+                let template = self.clone();
+                for i in 0..start {
+                    let mut new_nfa = template.clone();
+                    if i == start - 1 {
+                        new_nfa.add_modifier(Some(ParseElement::Star));
+                    }
+                    self.concat(&mut new_nfa);
+                }
+            }
+
+            _ => {}
         }
     }
 

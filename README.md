@@ -20,7 +20,7 @@ Additionally supported:
 
 - Wildcard `.`
 - Repetition metacharacters `+`, `?`
-- Repetition ranges `{min, max}`
+- Repetition ranges `{min, max}`, `{n}`, `{n,}`
 - Character ranges `[...]`
 - Character classes `\w`, `\d`, `\s`
 - Scoped backreferences (`\n` where `1 <= n <= u64::MAX`)

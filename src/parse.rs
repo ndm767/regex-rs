@@ -1,6 +1,5 @@
+use crate::nfa::Nfa;
 use crate::transition_table::Transition;
-
-use super::nfa::Nfa;
 
 #[derive(Debug, Clone)]
 pub enum ParseElement {
@@ -51,6 +50,30 @@ fn get_character_class(c: char) -> Vec<char> {
         _ => {
             panic!("{c} is not a supported character class!")
         }
+    }
+}
+
+fn get_escaped(iter: &mut impl Iterator<Item = char>) -> char {
+    let next = iter.next().unwrap();
+
+    match next {
+        '.' | '*' | '+' | '?' | '{' | '}' | '|' | '^' | '$' | '(' | ')' | '[' | ']' | '-'
+        | '\\' => next,
+        'x' => {
+            let mut n = iter.next().unwrap().to_digit(16).unwrap();
+            n *= 16;
+            n += iter.next().unwrap().to_digit(16).unwrap();
+            char::from_u32(n).unwrap()
+        }
+        'u' => {
+            let mut n = 0u32;
+            for _ in 0..4 {
+                n *= 16;
+                n += iter.next().unwrap().to_digit(16).unwrap();
+            }
+            char::from_u32(n).unwrap()
+        }
+        _ => panic!("Unknown escape character {next}!"),
     }
 }
 
@@ -134,16 +157,10 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                 while !matches!(iter.peek().unwrap(), ']') {
                     match iter.next().unwrap() {
                         '\\' => match iter.peek().unwrap() {
-                            '.' | '*' | '+' | '?' | '{' | '}' | '|' | '^' | '$' | '(' | ')'
-                            | '[' | ']' | '-' | '\\' => {
-                                values.push(iter.next().unwrap());
-                            }
                             'w' | 'd' | 's' => {
                                 values.extend(get_character_class(iter.next().unwrap()));
                             }
-                            _ => {
-                                panic!("Unknown escape in brackets!");
-                            }
+                            _ => values.push(get_escaped(&mut iter)),
                         },
                         '-' => {
                             // plain hyphen is valid if it is the first or last character
@@ -171,28 +188,26 @@ pub fn lex(input: String) -> Vec<ParseElement> {
 
             '\\' => {
                 // Escaped character
-                let next = iter.next().unwrap();
-
-                match next {
+                match iter.peek().unwrap() {
                     'w' | 'd' | 's' => {
                         // character classes are treated like brackets
-                        curr.push(ParseElement::Bracket(get_character_class(next)));
+                        curr.push(ParseElement::Bracket(get_character_class(
+                            iter.next().unwrap(),
+                        )));
                     }
+
                     '0'..='9' => {
                         // digits
-                        let mut n: u64 = next.to_digit(10).unwrap() as u64;
+                        let mut n: u64 = iter.next().unwrap().to_digit(10).unwrap() as u64;
                         while iter.peek().unwrap().is_ascii_digit() {
                             n *= 10;
                             n += iter.next().unwrap().to_digit(10).unwrap() as u64;
                         }
                         curr.push(ParseElement::BackReference(n));
                     }
-                    '.' | '*' | '+' | '?' | '{' | '}' | '|' | '^' | '$' | '(' | ')' | '[' | ']'
-                    | '-' | '\\' => {
-                        curr.push(ParseElement::Literal(next));
-                    }
+
                     _ => {
-                        panic!("Unknown escape sequence {next}");
+                        curr.push(ParseElement::Literal(get_escaped(&mut iter)));
                     }
                 }
             }

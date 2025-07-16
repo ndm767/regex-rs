@@ -24,3 +24,4 @@ Additionally supported:
 - Character ranges `[...]`
 - Character classes `\w`, `\d`, `\s`
 - Scoped backreferences (`\n` where `1 <= n <= u64::MAX`)
+- Hex escapes (`\xnn`, `\unnnn` where `n` is a hexidecimal digit)

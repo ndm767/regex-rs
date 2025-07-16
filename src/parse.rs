@@ -30,6 +30,30 @@ impl ParseElement {
     }
 }
 
+fn get_character_class(c: char) -> Vec<char> {
+    match c {
+        'w' => {
+            /* [A-Za-z0-9_]  */
+            let mut values: Vec<char> = ('A'..='Z').collect();
+            values.append(&mut ('a'..='z').collect());
+            values.append(&mut ('0'..='9').collect());
+            values.push('_');
+            values
+        }
+        'd' => {
+            /* [0-9] */
+            ('0'..='9').collect()
+        }
+        's' => {
+            /* [ \t] */
+            vec![' ', '\t']
+        }
+        _ => {
+            panic!("{c} is not a supported character class!")
+        }
+    }
+}
+
 pub fn lex(input: String) -> Vec<ParseElement> {
     let mut iter = input.chars().peekable();
     let mut stack = Vec::new();
@@ -92,22 +116,29 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                 let mut values = Vec::new();
 
                 while !matches!(iter.peek().unwrap(), ']') {
-                    let curr = iter.next().unwrap();
-                    match curr {
+                    match iter.next().unwrap() {
                         '\\' => match iter.peek().unwrap() {
                             '.' | '*' | '+' | '?' | '{' | '}' | '|' | '^' | '$' | '(' | ')'
                             | '[' | ']' | '-' | '\\' => {
                                 values.push(iter.next().unwrap());
+                            }
+                            'w' | 'd' | 's' => {
+                                values.extend(get_character_class(iter.next().unwrap()));
                             }
                             _ => {
                                 panic!("Unknown escape in brackets!");
                             }
                         },
                         '-' => {
-                            let prev = values.pop().unwrap();
-                            let end = iter.next().unwrap();
-                            for c in prev..=end {
-                                values.push(c);
+                            // plain hyphen is valid if it is the first or last character
+                            if values.is_empty() || *iter.peek().unwrap() == ']' {
+                                values.push('-');
+                            } else {
+                                let prev = values.pop().unwrap();
+                                let end = iter.next().unwrap();
+                                for c in prev..=end {
+                                    values.push(c);
+                                }
                             }
                         }
                         c => {
@@ -129,29 +160,7 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                 match next {
                     'w' | 'd' | 's' => {
                         // character classes are treated like brackets
-                        match next {
-                            'w' => {
-                                /* [A-Za-z0-9_]  */
-                                let mut values: Vec<char> = ('A'..='Z').collect();
-                                values.append(&mut ('a'..='z').collect());
-                                values.append(&mut ('0'..='9').collect());
-                                values.push('_');
-                                curr.push(ParseElement::Bracket(values));
-                            }
-                            'd' => {
-                                /* [0-9] */
-                                let values: Vec<char> = ('0'..='9').collect();
-                                curr.push(ParseElement::Bracket(values));
-                            }
-                            's' => {
-                                /* [ \t] */
-                                let values = vec![' ', '\t'];
-                                curr.push(ParseElement::Bracket(values));
-                            }
-                            _ => {
-                                unreachable!()
-                            }
-                        }
+                        curr.push(ParseElement::Bracket(get_character_class(next)));
                     }
                     '0'..='9' => {
                         // digits
@@ -249,7 +258,6 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
             | ParseElement::Range(_, _) => {
                 panic!("Unexpected modifier!");
             }
-            _ => panic!("Unknown token {tok:?}"),
         }
     }
 

@@ -10,6 +10,7 @@ pub trait TransitionTable<T> {
     fn rename(&mut self, old: T, new: T);
 }
 
+// Transition table with BTreeSet/Vec end states
 impl<S, T> TransitionTable<S> for HashMap<S, HashMap<Transition, T>>
 where
     S: PartialEq + Eq + Hash + Clone,
@@ -39,7 +40,7 @@ where
     }
 }
 
-trait StateContainer<T> {
+pub trait StateContainer<T> {
     fn new_container() -> Self;
     fn insert_state(&mut self, v: T);
     fn contains_state(&self, v: &T) -> bool;
@@ -112,6 +113,12 @@ impl NfaState {
             Self::Accepting => "accepting".to_string(),
             Self::S(n) => format!("s{n}"),
         }
+    }
+}
+
+impl Default for NfaState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

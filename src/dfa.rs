@@ -3,9 +3,9 @@
 use std::collections::{BTreeSet, HashMap};
 
 use crate::nfa::Nfa;
-use crate::transition_table::{NfaState, Transition, TransitionTable};
+use crate::transition_table::{NfaState, StateContainer, Transition, TransitionTable};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SimError {
     #[allow(dead_code)] // only accessed via Debug
     NoMatch(char),
@@ -25,6 +25,30 @@ impl From<BTreeSet<NfaState>> for DfaState {
         Self {
             internal: value.clone(),
             accepting: value.contains(&NfaState::Accepting),
+        }
+    }
+}
+
+impl StateContainer<DfaState> for DfaState {
+    fn new_container() -> Self {
+        Self {
+            internal: BTreeSet::new(),
+            accepting: false,
+        }
+    }
+
+    fn insert_state(&mut self, v: DfaState) {
+        self.internal = v.internal;
+        self.accepting = v.accepting;
+    }
+
+    fn contains_state(&self, v: &DfaState) -> bool {
+        *self == *v
+    }
+
+    fn replace_state(&mut self, old: &DfaState, new: DfaState) {
+        if *self == *old {
+            self.insert_state(new);
         }
     }
 }
@@ -226,6 +250,7 @@ impl Dfa {
             }
         }
 
+        // map the old DFA states to their new, minimized equivalents
         let mut changes: HashMap<DfaState, DfaState> = HashMap::new();
         for p in P {
             if p.len() > 1 {
@@ -244,21 +269,12 @@ impl Dfa {
             }
         }
 
-        for (old, new) in &changes {
-            if self.transitions.contains_key(old) {
-                let row = self.transitions.remove(old).unwrap();
-                self.transitions.insert(new.clone(), row);
-            }
+        if changes.contains_key(&self.start_state) {
+            self.start_state = changes.get(&self.start_state).unwrap().clone();
         }
 
-        for map in self.transitions.values_mut() {
-            let map_clone = map.clone();
-            let keys = map_clone.keys().collect::<Vec<_>>();
-            for key in keys {
-                if changes.contains_key(map.get(key).unwrap()) {
-                    map.insert(*key, changes.get(map.get(key).unwrap()).unwrap().clone());
-                }
-            }
+        for (old, new) in changes {
+            self.transitions.rename(old, new);
         }
     }
 

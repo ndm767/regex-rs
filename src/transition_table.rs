@@ -90,13 +90,13 @@ where
 static STATE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum State {
+pub enum NfaState {
     Start,
     Accepting,
     S(u64),
 }
 
-impl State {
+impl NfaState {
     pub fn new() -> Self {
         Self::S(STATE_COUNTER.fetch_add(1, Ordering::Relaxed))
     }

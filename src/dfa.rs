@@ -3,7 +3,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use crate::nfa::Nfa;
-use crate::transition_table::{State, Transition, TransitionTable};
+use crate::transition_table::{NfaState, Transition, TransitionTable};
 
 #[derive(Debug)]
 pub enum SimError {
@@ -16,15 +16,15 @@ pub enum SimError {
 
 #[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone)]
 pub struct DfaState {
-    pub internal: BTreeSet<State>,
+    pub internal: BTreeSet<NfaState>,
     accepting: bool,
 }
 
-impl From<BTreeSet<State>> for DfaState {
-    fn from(value: BTreeSet<State>) -> Self {
+impl From<BTreeSet<NfaState>> for DfaState {
+    fn from(value: BTreeSet<NfaState>) -> Self {
         Self {
             internal: value.clone(),
-            accepting: value.contains(&State::Accepting),
+            accepting: value.contains(&NfaState::Accepting),
         }
     }
 }
@@ -69,7 +69,7 @@ pub struct Dfa {
 
 impl Dfa {
     pub fn from_nfa(nfa: Nfa) -> Self {
-        let start_state = DfaState::from(nfa.epsilon_closure(vec![State::Start]));
+        let start_state = DfaState::from(nfa.epsilon_closure(vec![NfaState::Start]));
         let mut transitions = HashMap::new();
         let mut states = BTreeSet::from([start_state.clone()]);
 
@@ -88,6 +88,10 @@ impl Dfa {
                     continue;
                 }
                 for (transition, map) in nfa.transitions.get(internal).unwrap() {
+                    if *transition == Transition::Epsilon {
+                        continue;
+                    }
+
                     let closure = DfaState::from(nfa.epsilon_closure(map.clone()));
 
                     if !transitions.contains_key(&state) {

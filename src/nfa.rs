@@ -1,6 +1,6 @@
 use std::collections::{BTreeSet, HashMap};
 
-use crate::transition_table::{State, Transition, TransitionTable};
+use crate::transition_table::{NfaState, Transition, TransitionTable};
 
 #[derive(Debug, Clone, Copy)]
 pub enum TransitionModifier {
@@ -12,7 +12,7 @@ pub enum TransitionModifier {
 
 #[derive(Debug, Clone)]
 pub struct Nfa {
-    pub transitions: HashMap<State, HashMap<Transition, Vec<State>>>,
+    pub transitions: HashMap<NfaState, HashMap<Transition, Vec<NfaState>>>,
     pub empty: bool,
 }
 
@@ -27,8 +27,8 @@ impl Nfa {
     pub fn new(edge: Transition, modifier: Option<TransitionModifier>) -> Self {
         let mut ret = Self {
             transitions: HashMap::from([(
-                State::Start,
-                HashMap::from([(edge, vec![State::Accepting])]),
+                NfaState::Start,
+                HashMap::from([(edge, vec![NfaState::Accepting])]),
             )]),
             empty: false,
         };
@@ -42,17 +42,17 @@ impl Nfa {
         match modifier {
             None => {}
             Some(TransitionModifier::Star) => {
-                let final_state = State::new();
+                let final_state = NfaState::new();
                 self.set_accepting_state(final_state);
 
                 self.transitions.add_transition(
-                    State::Start,
+                    NfaState::Start,
                     Transition::Epsilon,
-                    State::Accepting,
+                    NfaState::Accepting,
                 );
 
                 self.transitions
-                    .add_transition(final_state, Transition::Epsilon, State::Start);
+                    .add_transition(final_state, Transition::Epsilon, NfaState::Start);
             }
 
             Some(TransitionModifier::Plus) => {
@@ -63,9 +63,9 @@ impl Nfa {
 
             Some(TransitionModifier::Question) => {
                 self.transitions.add_transition(
-                    State::Start,
+                    NfaState::Start,
                     Transition::Epsilon,
-                    State::Accepting,
+                    NfaState::Accepting,
                 );
             }
 
@@ -82,11 +82,11 @@ impl Nfa {
         }
     }
 
-    fn set_accepting_state(&mut self, new_state: State) {
+    fn set_accepting_state(&mut self, new_state: NfaState) {
         for map in self.transitions.values_mut() {
             for transition in map.values_mut() {
                 for state in transition.iter_mut() {
-                    if *state == State::Accepting {
+                    if *state == NfaState::Accepting {
                         *state = new_state;
                     }
                 }
@@ -100,7 +100,7 @@ impl Nfa {
             return;
         }
 
-        let new_state = State::new();
+        let new_state = NfaState::new();
 
         // set old accepting state to other's start state
         self.set_accepting_state(new_state);
@@ -108,7 +108,7 @@ impl Nfa {
         let mut other = other.to_owned();
 
         // set other's start to new state
-        other.transitions.rename(State::Start, new_state);
+        other.transitions.rename(NfaState::Start, new_state);
 
         // copy other's transition table over to self
         for (start, map) in &other.transitions {
@@ -126,7 +126,7 @@ impl Nfa {
         }
     }
 
-    pub fn epsilon_closure(&self, states: Vec<State>) -> BTreeSet<State> {
+    pub fn epsilon_closure(&self, states: Vec<NfaState>) -> BTreeSet<NfaState> {
         let mut stack = Vec::new();
         let mut ret = BTreeSet::new();
 

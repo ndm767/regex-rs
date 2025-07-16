@@ -3,7 +3,10 @@ use std::hash::Hash;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub trait TransitionTable<T> {
+    // add a new transition to the table
     fn add_transition(&mut self, start: T, transition: Transition, end: T);
+
+    // replace all instances of state old with state new
     fn rename(&mut self, old: T, new: T);
 }
 
@@ -19,13 +22,14 @@ where
             .or_insert(T::new_container())
             .insert_state(end);
     }
+
     fn rename(&mut self, old: S, new: S) {
         if self.contains_key(&old) {
             let row = self.remove(&old).unwrap();
             self.insert(new.clone(), row);
         }
 
-        for (_, map) in self.iter_mut() {
+        for map in self.values_mut() {
             for end in map.values_mut() {
                 if end.contains_state(&old) {
                     end.replace_state(&old, new.clone());
@@ -87,6 +91,7 @@ where
     }
 }
 
+// just keep a global state counter to prevent name collisions
 static STATE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

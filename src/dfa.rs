@@ -133,6 +133,8 @@ impl Dfa {
                     .or_default()
                     .merge(closure);
 
+                // since we may have merged states, the new state may not necessarily be the closure
+                // add it to the unmarked set if we haven't seen it before
                 let insertion = transitions.get(&state).unwrap().get(&trans).unwrap();
                 if !seen.contains(insertion) && !unmarked.contains(insertion) {
                     unmarked.insert(insertion.clone());
@@ -161,6 +163,7 @@ impl Dfa {
             }
         }
 
+        // start with partitions of accepting and non-accepting states
         let accepting = self
             .states
             .iter()

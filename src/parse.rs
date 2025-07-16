@@ -80,6 +80,7 @@ fn get_escaped(iter: &mut impl Iterator<Item = char>) -> char {
 
 pub fn lex(input: String) -> Vec<ParseElement> {
     let mut iter = input.chars().peekable();
+
     let mut stack = Vec::new();
     let mut curr = Vec::new();
 
@@ -89,6 +90,9 @@ pub fn lex(input: String) -> Vec<ParseElement> {
             '*' => curr.push(ParseElement::Star),
             '+' => curr.push(ParseElement::Plus),
             '?' => curr.push(ParseElement::Question),
+            '|' => curr.push(ParseElement::Union),
+
+            // repetition ranges
             '{' => {
                 // consume until digit
                 while !iter.peek().unwrap().is_ascii_digit() {
@@ -137,8 +141,6 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                 }
             }
 
-            '|' => curr.push(ParseElement::Union),
-
             '(' => {
                 // new group
                 stack.push(curr.clone());
@@ -151,8 +153,9 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                 curr = stack.pop().unwrap();
                 curr.push(group);
             }
+
+            // character ranges
             '[' => {
-                // bracket
                 let mut values = Vec::new();
 
                 while !matches!(iter.peek().unwrap(), ']') {
@@ -187,8 +190,8 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                 curr.push(ParseElement::Bracket(values));
             }
 
+            // Escaped character
             '\\' => {
-                // Escaped character
                 match iter.peek().unwrap() {
                     'w' | 'd' | 's' => {
                         // character classes are treated like brackets
@@ -212,6 +215,8 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                     }
                 }
             }
+
+            // anything else is a literal
             c => curr.push(ParseElement::Literal(c)),
         }
     }
@@ -232,21 +237,26 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
     let mut tok_iter = toks.iter().peekable();
 
     while let Some(tok) = tok_iter.next() {
+        // check repetition metacharacter
         let modifier = match tok_iter.peek() {
             Some(m) if m.is_modifier() => Some(tok_iter.next().unwrap().clone()),
             _ => None,
         };
+
         match tok {
             ParseElement::Literal(c) => {
                 curr_nfa.concat(&mut Nfa::new(Transition::Literal(*c), modifier));
             }
+
             ParseElement::Union => {
                 union_stack.push(curr_nfa);
                 curr_nfa = Nfa::empty();
             }
+
             ParseElement::Wildcard => {
                 curr_nfa.concat(&mut Nfa::new(Transition::Wildcard, modifier));
             }
+
             ParseElement::Bracket(chars) => {
                 let mut chars = chars.clone();
                 let mut new_nfa = Nfa::new(Transition::Literal(chars.pop().unwrap()), None);
@@ -261,17 +271,20 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
 
                 curr_nfa.concat(&mut new_nfa);
             }
+
             ParseElement::Group(grp) => {
                 let mut new_nfa = parse(grp.clone());
                 groups.push(new_nfa.clone());
                 new_nfa.add_modifier(modifier);
                 curr_nfa.concat(&mut new_nfa);
             }
+
             ParseElement::BackReference(n) => {
                 let mut new_nfa = groups[(*n as usize) - 1].clone();
                 new_nfa.add_modifier(modifier);
                 curr_nfa.concat(&mut new_nfa);
             }
+
             ParseElement::Star
             | ParseElement::Plus
             | ParseElement::Question
@@ -285,5 +298,6 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
     while !union_stack.is_empty() {
         curr_nfa.union(&mut union_stack.pop().unwrap());
     }
+
     curr_nfa
 }

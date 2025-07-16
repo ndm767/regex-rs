@@ -47,6 +47,7 @@ fn main() {
         .collect::<Vec<_>>()
         .contains(&String::from("--output-png"));
 
+    // parse regex
     let toks = lex(read!("{}\n"));
 
     let nfa = parse(toks);
@@ -72,6 +73,7 @@ fn main() {
         );
     }
 
+    // TUI
     print!("{}", "> ".green().bold());
     let mut input: String = read!("{}\n");
 
@@ -85,6 +87,7 @@ fn main() {
         input = read!("{}\n");
     }
 
+    // subprocess cleanup
     nfa_child.kill().expect("Failed to kill nfa child");
     dfa_child.kill().expect("Failed to kill dfa child");
     dfa_non_min_child

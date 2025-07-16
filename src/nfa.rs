@@ -37,25 +37,30 @@ impl Nfa {
         match modifier {
             Some(ParseElement::Star) => {
                 let final_state = NfaState::new();
-                self.set_accepting_state(final_state);
 
+                self.transitions.rename(NfaState::Accepting, final_state);
+
+                // add epsilon transition from start to finish for 0 instances
                 self.transitions.add_transition(
                     NfaState::Start,
                     Transition::Epsilon,
                     NfaState::Accepting,
                 );
 
+                // add epsilon transition from finish to start for repeated instances
                 self.transitions
                     .add_transition(final_state, Transition::Epsilon, NfaState::Start);
             }
 
             Some(ParseElement::Plus) => {
+                // treat x+ as x concatenated with x*
                 let mut new_nfa = self.clone();
                 new_nfa.add_modifier(Some(ParseElement::Star));
                 self.concat(&mut new_nfa);
             }
 
             Some(ParseElement::Question) => {
+                // add epsilon transition from start to finish
                 self.transitions.add_transition(
                     NfaState::Start,
                     Transition::Epsilon,
@@ -64,6 +69,7 @@ impl Nfa {
             }
 
             Some(ParseElement::Range(lower, upper)) => {
+                // repeated concatenation up to lower, then concatenate with ? metacharacter through upper
                 let template = self.clone();
                 for i in 1..upper {
                     let mut new_nfa = template.clone();
@@ -75,6 +81,7 @@ impl Nfa {
             }
 
             Some(ParseElement::OpenRange(start)) => {
+                // concatenate start times, with the last getting a *
                 let template = self.clone();
                 for i in 0..start {
                     let mut new_nfa = template.clone();
@@ -89,18 +96,6 @@ impl Nfa {
         }
     }
 
-    fn set_accepting_state(&mut self, new_state: NfaState) {
-        for map in self.transitions.values_mut() {
-            for transition in map.values_mut() {
-                for state in transition.iter_mut() {
-                    if *state == NfaState::Accepting {
-                        *state = new_state;
-                    }
-                }
-            }
-        }
-    }
-
     pub fn concat(&mut self, other: &mut Self) {
         if self.empty {
             *self = other.clone();
@@ -110,7 +105,7 @@ impl Nfa {
         let new_state = NfaState::new();
 
         // set old accepting state to other's start state
-        self.set_accepting_state(new_state);
+        self.transitions.rename(NfaState::Accepting, new_state);
 
         let mut other = other.to_owned();
 
@@ -124,6 +119,7 @@ impl Nfa {
     }
 
     pub fn union(&mut self, other: &mut Self) {
+        // since states are unique, the union is just the two transition tables merging
         for (start, map) in other.transitions.iter() {
             for (transition, states) in map.iter() {
                 for state in states {
@@ -133,6 +129,7 @@ impl Nfa {
         }
     }
 
+    // find all states reachable from the set states through epsilon-transitions alone
     pub fn epsilon_closure(&self, states: Vec<NfaState>) -> BTreeSet<NfaState> {
         let mut stack = Vec::new();
         let mut ret = BTreeSet::new();

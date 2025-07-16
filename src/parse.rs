@@ -59,6 +59,7 @@ fn get_escaped(iter: &mut impl Iterator<Item = char>) -> char {
     match next {
         '.' | '*' | '+' | '?' | '{' | '}' | '|' | '^' | '$' | '(' | ')' | '[' | ']' | '-'
         | '\\' => next,
+        't' => '\t',
         'x' => {
             let mut n = iter.next().unwrap().to_digit(16).unwrap();
             n *= 16;

@@ -37,19 +37,26 @@ impl Nfa {
         match modifier {
             Some(ParseElement::Star) => {
                 let final_state = NfaState::new();
+                let start_state = NfaState::new();
 
+                // we create new start and final states to avoid issues with unions
                 self.transitions.rename(NfaState::Accepting, final_state);
+                self.transitions.rename(NfaState::Start, start_state);
 
                 // add epsilon transition from start to finish for 0 instances
                 self.transitions.add_transition(
-                    NfaState::Start,
+                    start_state,
                     Transition::Epsilon,
                     NfaState::Accepting,
                 );
 
                 // add epsilon transition from finish to start for repeated instances
                 self.transitions
-                    .add_transition(final_state, Transition::Epsilon, NfaState::Start);
+                    .add_transition(final_state, Transition::Epsilon, start_state);
+
+                // add epsilon transition from true start to the new start
+                self.transitions
+                    .add_transition(NfaState::Start, Transition::Epsilon, start_state);
             }
 
             Some(ParseElement::Plus) => {

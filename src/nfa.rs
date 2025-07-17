@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{hash_map::Entry, BTreeSet, HashMap};
 
 use crate::{
     parse::ParseElement,
@@ -62,6 +62,7 @@ impl Nfa {
             Some(ParseElement::Plus) => {
                 // treat x+ as x concatenated with x*
                 let mut new_nfa = self.clone();
+                new_nfa.reassign_states();
                 new_nfa.add_modifier(Some(ParseElement::Star));
                 self.concat(&mut new_nfa);
             }
@@ -80,6 +81,7 @@ impl Nfa {
                 let template = self.clone();
                 for i in 1..upper {
                     let mut new_nfa = template.clone();
+                    new_nfa.reassign_states();
                     if i >= lower {
                         new_nfa.add_modifier(Some(ParseElement::Question));
                     }
@@ -92,6 +94,7 @@ impl Nfa {
                 let template = self.clone();
                 for i in 0..start {
                     let mut new_nfa = template.clone();
+                    new_nfa.reassign_states();
                     if i == start - 1 {
                         new_nfa.add_modifier(Some(ParseElement::Star));
                     }
@@ -160,6 +163,24 @@ impl Nfa {
         }
 
         ret
+    }
+
+    // Reassign all states (except Start and Accepting) in the NFA to new state numbers. Useful for concatenating copies of NFAs
+    pub fn reassign_states(&mut self) {
+        let mut lookup: HashMap<NfaState, NfaState> = HashMap::new();
+
+        for state in self.transitions.keys() {
+            if *state == NfaState::Start {
+                continue;
+            }
+            if let Entry::Vacant(e) = lookup.entry(*state) {
+                e.insert(NfaState::new());
+            }
+        }
+
+        for (old, new) in lookup {
+            self.transitions.rename(old, new);
+        }
     }
 
     pub fn to_dot(&self) -> String {

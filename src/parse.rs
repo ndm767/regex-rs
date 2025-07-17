@@ -203,7 +203,7 @@ pub fn lex(input: String) -> Vec<ParseElement> {
                     '0'..='9' => {
                         // digits
                         let mut n: u64 = iter.next().unwrap().to_digit(10).unwrap() as u64;
-                        while iter.peek().unwrap().is_ascii_digit() {
+                        while iter.peek().is_some() && iter.peek().unwrap().is_ascii_digit() {
                             n *= 10;
                             n += iter.next().unwrap().to_digit(10).unwrap() as u64;
                         }
@@ -282,6 +282,7 @@ pub fn parse(toks: Vec<ParseElement>) -> Nfa {
             ParseElement::BackReference(n) => {
                 let mut new_nfa = groups[(*n as usize) - 1].clone();
                 new_nfa.add_modifier(modifier);
+                new_nfa.reassign_states();
                 curr_nfa.concat(&mut new_nfa);
             }
 
